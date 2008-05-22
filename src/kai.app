@@ -1,0 +1,18 @@
+{application, kai, 
+ [{description, "Kai - A distributed hashtable like Amazon's Dynamo"},
+  {vsn, "0.1"},
+  {modules, [kai, kai_sup, kai_memcache, kai_api, kai_network, kai_sync,
+	     kai_store, kai_hash, kai_config]},
+  {registered, [kai_sup, kai_network, kai_sync, kai_store, kai_hash, kai_log,
+                kai_config]},
+  {applications, [kernel, stdlib]},
+  {mod, {kai, []}},
+  {start_phases, []},
+  {env, [{port, 11011},
+	 {memcache_port, 11211},
+	 {n, 3},
+	 {r, 2},
+	 {w, 2},
+	 {number_of_buckets, 1024},
+	 {number_of_virtual_nodes, 128}]}
+ ]}.
