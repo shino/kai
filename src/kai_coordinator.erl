@@ -17,7 +17,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
 	 code_change/3]).
 -export([map_in_get/4, map_in_put/4, map_in_delete/4]).
--export([stop/0, get/1, put/1, delete/1]).
+-export([stop/0, route/1]).
 
 -include("kai.hrl").
 
@@ -34,7 +34,18 @@ init(_Args) ->
 terminate(_Reason, _State) ->
     ok.
 
-do_get(Key, State) ->
+route({Type, Message}, State) ->
+    % XXX should be routed to appropriate coordinator node
+    Result =
+	case Type of
+	    get -> do_get(Message);
+	    put -> do_put(Message);
+	    delete -> do_delete(Message);
+	    _Other -> {error, ebadrpc}
+	end,
+    {reply, Result, State}.
+
+do_get(Key) ->
     {nodes, Nodes} = kai_hash:find_nodes(Key),
     Ref = make_ref(),
     lists:foreach(
@@ -44,8 +55,8 @@ do_get(Key, State) ->
     N = kai_config:get(n),
     R = kai_config:get(r),
     case gather_in_get(Ref, N, R, []) of
-	[Data|RestData] -> {reply, uniq_in_get(RestData, [Data]), State};
-	_NoData -> {reply, undefined, State}
+	[Data|RestData] -> uniq_in_get(RestData, [Data]);
+	_NoData -> undefined
     end.
 
 map_in_get(Node, Key, Ref, Pid) ->
@@ -82,7 +93,7 @@ uniq_in_get([Data|RestData], UniqData) ->
 	_ -> uniq_in_get(RestData, UniqData)
     end.
 
-do_put(Data1, State) ->
+do_put(Data1) ->
     Key = Data1#data.key,
     {bucket, Bucket} = kai_hash:find_bucket(Key),
     {nodes, Nodes} = kai_hash:find_nodes(Bucket),
@@ -94,7 +105,7 @@ do_put(Data1, State) ->
      ),
     N = kai_config:get(n),
     W = kai_config:get(w),
-    {reply, gather_in_put(Ref, N, W), State}.
+    gather_in_put(Ref, N, W).
 
 map_in_put(Node, Data, Ref, Pid) ->
     case kai_api:put(Node, Data) of
@@ -119,7 +130,7 @@ gather_in_put(Ref, N, W) ->
 	    {error, etimedout}
     end.
 
-do_delete(Key, State) ->
+do_delete(Key) ->
     {nodes, Nodes} = kai_hash:find_nodes(Key),
     Ref = make_ref(),
     lists:foreach(
@@ -128,7 +139,7 @@ do_delete(Key, State) ->
      ),
     N = kai_config:get(n),
     W = kai_config:get(w),
-    {reply, gather_in_delete(Ref, N, W, []), State}.
+    gather_in_delete(Ref, N, W, []).
 
 map_in_delete(Node, Key, Ref, Pid) ->
     case kai_api:delete(Node, Key) of
@@ -159,12 +170,8 @@ gather_in_delete(Ref, N, W, Results) ->
 
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State};
-handle_call({get, Key}, _From, State) ->
-    do_get(Key, State);
-handle_call({put, Data}, _From, State) ->
-    do_put(Data, State);
-handle_call({delete, Key}, _From, State) ->
-    do_delete(Key, State).
+handle_call({route, Request}, _From, State) ->
+    route(Request, State).
 handle_cast(_Msg, State) ->
     {noreply, State}.
 handle_info(_Info, State) ->
@@ -174,9 +181,5 @@ code_change(_OldVsn, State, _Extra) ->
 
 stop() ->
     gen_server:call(?SERVER, stop).
-get(Key) ->
-    gen_server:call(?SERVER, {get, Key}).
-put(Data) ->
-    gen_server:call(?SERVER, {put, Data}).
-delete(Key) ->
-    gen_server:call(?SERVER, {delete, Key}).
+route(Request) ->
+    gen_server:call(?SERVER, {route, Request}).

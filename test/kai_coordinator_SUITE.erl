@@ -35,27 +35,27 @@ test1(_Conf) ->
 
     ?assertEqual(
        ok,
-       kai_coordinator:put(Data)
+       kai_coordinator:route({put, Data})
       ),
 
     ?assertEqual(
        [Data],
-       kai_coordinator:get("item-1")
+       kai_coordinator:route({get, "item-1"})
       ),
 
     ?assertEqual(
        ok,
-       kai_coordinator:delete("item-1")
+       kai_coordinator:route({delete, "item-1"})
       ),
 
     ?assertEqual(
        undefined,
-       kai_coordinator:get("item-1")
+       kai_coordinator:route({get, "item-1"})
       ),
 
     ?assertEqual(
        undefined,
-       kai_coordinator:delete("item-1")
+       kai_coordinator:route({delete, "item-1"})
       ),
 
     kai_coordinator:stop(),
