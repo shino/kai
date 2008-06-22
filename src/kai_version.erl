@@ -32,13 +32,13 @@ terminate(_Reason, _State) ->
     ok.
 
 update(Data, State) ->
-    % XXX should update #data.vector_clocks
+    % TODO: update #data.vector_clocks
     {reply, Data#data{last_modified=now()}, State}.
 
 do_order([], UniqData) ->
     UniqData;
 do_order([Data|RestData], UniqData) ->
-    % XXX should resolve ordering of versions by using VectorClocks
+    % TODO: resolve ordering of versions by using VectorClocks
     Checksum = Data#data.checksum,
     case length(lists:filter(fun(U) -> Checksum =:= U#data.checksum end, UniqData)) of
 	0 -> do_order(RestData, [Data|UniqData]);

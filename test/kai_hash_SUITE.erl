@@ -140,7 +140,7 @@ test1(_Conf) ->
     ?assertNot(Node1 == ?NODE1),
 
     {bucket, Bucket2} = kai_hash:choose_bucket_randomly(),
-    ?assert((Bucket2 >= 0) or (Bucket2 < 8)), % XXX choose it from my buckets
+    ?assert((Bucket2 >= 0) or (Bucket2 < 8)), % TODO: choose it from my buckets
 
     {replaced_buckets, ReplacedBuckets3} = kai_hash:update_nodes([], [?NODE2]),
 

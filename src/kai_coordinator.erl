@@ -34,7 +34,7 @@ terminate(_Reason, _State) ->
     ok.
 
 route({Type, Message}, State) ->
-    % XXX should be routed to appropriate coordinator node
+    % TODO: route Message to appropriate coordinator node
     Result =
 	case Type of
 	    get -> coordinate_get(Message);
@@ -55,6 +55,7 @@ coordinate_get(Key) ->
     R = kai_config:get(r),
     case gather_in_get(Ref, N, R, []) of
 	ListOfData when is_list(ListOfData) ->
+	    % TODO: write back recent if multiple versions are found and they can be resolved
 	    kai_version:order(ListOfData);
 	_NoData ->
 	    undefined
