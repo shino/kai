@@ -50,19 +50,20 @@ test1(_Conf) ->
        kai_store:get("item-3")
       ),
 
-    {metadata, Metadata1} = kai_store:list(1),
-    ?assertEqual(1, length(Metadata1)),
-    ?assert(lists:keymember("item-2", 2, Metadata1)),
+    {list_of_data, ListOfData1} = kai_store:list(1),
+    ?assertEqual(1, length(ListOfData1)),
+    ?assert(lists:keymember("item-2", 2, ListOfData1)),
 
-    {metadata, Metadata2} = kai_store:list(2),
-    ?assertEqual(0, length(Metadata2)),
+    {list_of_data, ListOfData2} = kai_store:list(2),
+    ?assertEqual(0, length(ListOfData2)),
 
-    {metadata, Metadata3} = kai_store:list(3),
-    ?assertEqual(2, length(Metadata3)),
-    ?assert(lists:keymember("item-1", 2, Metadata3)),
-    ?assert(lists:keymember("item-3", 2, Metadata3)),
+    {list_of_data, ListOfData3} = kai_store:list(3),
+    ?assertEqual(2, length(ListOfData3)),
+    ?assert(lists:keymember("item-1", 2, ListOfData3)),
+    ?assert(lists:keymember("item-3", 2, ListOfData3)),
     
-    Data1b = #data{key="item-1", bucket=3, last_modified=now(), checksum=erlang:md5(<<"value-1">>), flags="0", value=(<<"value-1b">>)},
+    Data1b = #data{key="item-1", bucket=3, last_modified=now(),
+		   checksum=erlang:md5(<<"value-1">>), flags="0", value=(<<"value-1b">>)},
     kai_store:put(Data1b),
     ?assertEqual(
        Data1b,
@@ -75,9 +76,9 @@ test1(_Conf) ->
        kai_store:get("item-1")
       ),
 
-    {metadata, Metadata4} = kai_store:list(3),
-    ?assertEqual(1, length(Metadata4)),
-    ?assert(lists:keymember("item-3", 2, Metadata4)),
+    {list_of_data, ListOfData4} = kai_store:list(3),
+    ?assertEqual(1, length(ListOfData4)),
+    ?assert(lists:keymember("item-3", 2, ListOfData4)),
 
     kai_store:stop().
 

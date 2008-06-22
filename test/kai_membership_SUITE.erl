@@ -30,15 +30,16 @@ test1_api_proc(ApiSocket) ->
 		    gen_tcp:send(ApiSocket, term_to_binary({node_list, NodeList}));
 
 		{list, 3 = _Bucket} ->
-		    Metadata = [#metadata{key=("item-1"), bucket=3, last_modified=now(),
-					  checksum=erlang:md5(<<"item-1">>)}],
-		    gen_tcp:send(ApiSocket, term_to_binary({metadata, Metadata}));
+		    ListOfData = [#data{key=("item-1"), bucket=3, last_modified=now(),
+					checksum=erlang:md5(<<"item-1">>)}],
+		    gen_tcp:send(ApiSocket, term_to_binary({list_of_data, ListOfData}));
 		{list, _Bucket} ->
-		    gen_tcp:send(ApiSocket, term_to_binary({metadata, []}));
+		    gen_tcp:send(ApiSocket, term_to_binary({list_of_data, []}));
 
 		{get, "item-1"} ->
 		    Data = #data{key="item-1", bucket=3, last_modified=now(),
-				 checksum=erlang:md5(<<"value-1">>), flags="0", value=(<<"value-1">>)},
+				 checksum=erlang:md5(<<"value-1">>), flags="0",
+				 value=(<<"value-1">>)},
 		    gen_tcp:send(ApiSocket, term_to_binary(Data))
 	    end,
             test1_api_proc(ApiSocket)
@@ -83,8 +84,8 @@ test1(_Conf) ->
     ?assertEqual(4, length(NodeList)),
     ?assert(lists:member(?NODE2, NodeList)),
 
-    {metadata, Metadata} = kai_store:list(3),
-    ?assertEqual(0, length(Metadata)),
+    {list_of_data, ListOfData} = kai_store:list(3),
+    ?assertEqual(0, length(ListOfData)),
 
     kai_membership:check_node(?NODE1),
 
@@ -94,9 +95,9 @@ test1(_Conf) ->
     ?assertEqual(3, length(NodeList2)),
     ?assertNot(lists:member(?NODE1, NodeList2)),
 
-    {metadata, Metadata2} = kai_store:list(3),
-    ?assertEqual(1, length(Metadata2)),
-    ?assert(lists:keymember("item-1", 2, Metadata2)),
+    {list_of_data, ListOfData2} = kai_store:list(3),
+    ?assertEqual(1, length(ListOfData2)),
+    ?assert(lists:keymember("item-1", 2, ListOfData2)),
 
     timer:sleep(2100), % timeout and check ?NODE4 by kai_hash:choose_node_randomly/0
 

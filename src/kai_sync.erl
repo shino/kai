@@ -36,7 +36,7 @@ terminate(normal, _StateName, _StateData) ->
 retrieve_data(_Node, []) ->
     ok;
 retrieve_data(Node, [Metadata|Rest]) ->
-    Key = Metadata#metadata.key,
+    Key = Metadata#data.key,
     case kai_store:get(Key) of
 	Data when is_record(Data, data) ->
 	    retrieve_data(Node, Rest);
@@ -56,8 +56,8 @@ do_update_bucket(_Bucket, []) ->
     {error, enodata};
 do_update_bucket(Bucket, [Node|Rest]) ->
     case kai_api:list(Node, Bucket) of
-	{metadata, Metadata} ->
-	    retrieve_data(Node, Metadata);
+	{list_of_data, ListOfData} ->
+	    retrieve_data(Node, ListOfData);
 	{error, _Reason} ->
 	    do_update_bucket(Bucket, Rest)
     end.
@@ -70,11 +70,11 @@ do_update_bucket(Bucket) ->
 do_delete_bucket([]) ->
     ok;
 do_delete_bucket([Metadata|Rest]) ->
-    kai_store:delete(Metadata#metadata.key),
+    kai_store:delete(Metadata#data.key),
     do_delete_bucket(Rest);
 do_delete_bucket(Bucket) ->
-    {metadata, Metadata} = kai_store:list(Bucket),
-    do_delete_bucket(Metadata).
+    {list_of_data, ListOfData} = kai_store:list(Bucket),
+    do_delete_bucket(ListOfData).
 
 ready({update_bucket, Bucket}, State) ->
     do_update_bucket(Bucket),

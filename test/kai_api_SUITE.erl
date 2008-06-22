@@ -38,9 +38,9 @@ test1(_Conf) ->
     ok = kai_api:put(?NODE1, Data),
     ?assertEqual(Data, kai_store:get("item-1")),
 
-    Metadata = #metadata{key="item-1", bucket=3, last_modified=Data#data.last_modified,
-			 checksum=erlang:md5(<<"value-1">>)},
-    {metadata, [Metadata]} = kai_api:list(?NODE1, 3),
+    ListOfData = #data{key="item-1", bucket=3, last_modified=Data#data.last_modified,
+		       checksum=erlang:md5(<<"value-1">>)},
+    {list_of_data, [ListOfData]} = kai_api:list(?NODE1, 3),
 
     Data = kai_api:get(?NODE1, "item-1"),
 

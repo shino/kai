@@ -11,7 +11,6 @@
 % the License.
 
 -record(data, {key, bucket, last_modified, vector_clocks, checksum, flags, value}).
--record(metadata, {key, bucket, last_modified, vector_clocks, checksum}).
 
 -define(error(Data), kai_log:log(error, ?FILE, ?LINE, Data)).
 -define(warning(Data), kai_log:log(warning, ?FILE, ?LINE, Data)).

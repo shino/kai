@@ -34,13 +34,12 @@ terminate(_Reason, _State) ->
     ok.
 
 do_list(Bucket, State) ->
-    Head = #data{key='$1', bucket=Bucket, last_modified='$2', checksum='$3',
-		 flags='_', value='_'},
+    Head = #data{key='$1', bucket=Bucket, last_modified='$2', vector_clocks='$3', 
+		 checksum='$4', flags='_', value='_'},
     Cond = [],
-    Body = [{#metadata{key='$1', bucket=Bucket, last_modified='$2',
-		       checksum='$3'}}],
-    Metadata = ets:select(data, [{Head, Cond, Body}]),
-    {reply, {metadata, Metadata}, State}.
+    Body = [{#data{key='$1', bucket=Bucket, last_modified='$2', vector_clocks='$3', checksum='$4'}}],
+    ListOfData = ets:select(data, [{Head, Cond, Body}]),
+    {reply, {list_of_data, ListOfData}, State}.
 
 do_get(Key, State) ->
     case ets:lookup(data, Key) of
