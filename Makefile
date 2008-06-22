@@ -17,12 +17,12 @@ all: subdirs
 subdirs:
 	cd src; make
 
-test: all test_compile test_do
+test: test_do
 
-test_compile:
+test_compile: subdirs
 	cd test; make
 
-test_do:
+test_do: test_compile
 	cp src/*.beam test/
 	mkdir -p test/log
 	${RUN_TEST} -dir . -logdir test/log

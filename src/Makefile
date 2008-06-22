@@ -18,8 +18,8 @@
 .yrl.erl:
 	erlc -W -I ../include $<
 
-MODS = kai_config kai_log kai_hash kai_store kai_sync kai_membership kai_api \
-	kai_memcache kai_sup kai
+MODS = kai_config kai_log kai_hash kai_store kai_coordinator kai_sync \
+	kai_membership kai_api kai_memcache kai_sup kai
 
 all: compile
 
