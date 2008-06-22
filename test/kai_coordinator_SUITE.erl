@@ -26,22 +26,25 @@ test1(_Conf) ->
 			   {number_of_virtual_nodes, 2}]),
     kai_hash:start_link(),
     kai_store:start_link(),
-    kai_api:start_link(),
+    kai_version:start_link(),
     kai_coordinator:start_link(),
-
-    timer:sleep(100), % wait for starting kai_memcache
-
-    Data = #data{key="item-1", bucket=3, last_modified=now(), checksum=erlang:md5(<<"value-1">>), flags="0", value=(<<"value-1">>)},
+    kai_api:start_link(),
 
     ?assertEqual(
        ok,
-       kai_coordinator:route({put, Data})
+       kai_coordinator:route({put, #data{key="item-1", flags="0", value=(<<"value-1">>)}})
       ),
 
-    ?assertEqual(
-       [Data],
-       kai_coordinator:route({get, "item-1"})
-      ),
+    ListOfData = kai_coordinator:route({get, "item-1"}),
+    ?assertEqual(1, length(ListOfData)),
+
+    [Data|_] = ListOfData,
+    ?assert(is_record(Data, data)),
+    ?assertEqual("item-1", Data#data.key),
+    ?assertEqual(3, Data#data.bucket),
+    ?assertEqual(erlang:md5(<<"value-1">>), Data#data.checksum),
+    ?assertEqual("0", Data#data.flags),
+    ?assertEqual(<<"value-1">>, Data#data.value),
 
     ?assertEqual(
        ok,
@@ -59,6 +62,7 @@ test1(_Conf) ->
       ),
 
     kai_coordinator:stop(),
+    kai_version:stop(),
     kai_store:stop(),
     kai_hash:stop(),
     kai_config:stop().

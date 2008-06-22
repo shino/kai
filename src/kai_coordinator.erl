@@ -22,7 +22,6 @@
 -include("kai.hrl").
 
 -define(SERVER, ?MODULE).
--define(TIMEOUT_CLIENT, 3000).
 -define(TIMEOUT_GATHER, 200).
 
 start_link() ->
@@ -38,14 +37,14 @@ route({Type, Message}, State) ->
     % XXX should be routed to appropriate coordinator node
     Result =
 	case Type of
-	    get -> do_get(Message);
-	    put -> do_put(Message);
-	    delete -> do_delete(Message);
+	    get -> coordinate_get(Message);
+	    put -> coordinate_put(Message);
+	    delete -> coordinate_delete(Message);
 	    _Other -> {error, ebadrpc}
 	end,
     {reply, Result, State}.
 
-do_get(Key) ->
+coordinate_get(Key) ->
     {nodes, Nodes} = kai_hash:find_nodes(Key),
     Ref = make_ref(),
     lists:foreach(
@@ -55,8 +54,10 @@ do_get(Key) ->
     N = kai_config:get(n),
     R = kai_config:get(r),
     case gather_in_get(Ref, N, R, []) of
-	[Data|RestData] -> uniq_in_get(RestData, [Data]);
-	_NoData -> undefined
+	ListOfData when is_list(ListOfData) ->
+	    kai_version:order(ListOfData);
+	_NoData ->
+	    undefined
     end.
 
 map_in_get(Node, Key, Ref, Pid) ->
@@ -84,23 +85,24 @@ gather_in_get(Ref, N, R, Results) ->
 	    Results
     end.
 
-uniq_in_get([], UniqData) ->
-    UniqData;
-uniq_in_get([Data|RestData], UniqData) ->
-    Checksum = Data#data.checksum,
-    case length(lists:filter(fun(U) -> Checksum =:= U#data.checksum end, UniqData)) of
-	0 -> uniq_in_get(RestData, [Data|UniqData]);
-	_ -> uniq_in_get(RestData, UniqData)
-    end.
-
-do_put(Data1) ->
-    Key = Data1#data.key,
+coordinate_put(Data) ->
+    Key = Data#data.key,
+    Flags = Data#data.flags,
+    Value = Data#data.value,
     {bucket, Bucket} = kai_hash:find_bucket(Key),
     {nodes, Nodes} = kai_hash:find_nodes(Bucket),
-    Data2 = Data1#data{bucket=Bucket},
     Ref = make_ref(),
+    Data1 =
+	case kai_store:get(Key) of
+	    PreviousData when is_record(PreviousData, data) ->
+		PreviousData;
+	    undefined ->
+		#data{key=Key}
+	end,
+    Data2 = kai_version:update(Data1),
+    Data3 = Data2#data{bucket=Bucket, checksum=erlang:md5(Value), flags=Flags, value=Value},
     lists:foreach(
-      fun(Node) -> spawn(?MODULE, map_in_put, [Node, Data2, Ref, self()]) end,
+      fun(Node) -> spawn(?MODULE, map_in_put, [Node, Data3, Ref, self()]) end,
       Nodes
      ),
     N = kai_config:get(n),
@@ -130,7 +132,7 @@ gather_in_put(Ref, N, W) ->
 	    {error, etimedout}
     end.
 
-do_delete(Key) ->
+coordinate_delete(Key) ->
     {nodes, Nodes} = kai_hash:find_nodes(Key),
     Ref = make_ref(),
     lists:foreach(

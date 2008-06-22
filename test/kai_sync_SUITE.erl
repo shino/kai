@@ -65,8 +65,8 @@ test1(_Conf) ->
     kai_store:start_link(),
     kai_sync:start_link(),
 
-    {replaced_buckets, _ReplacedBuckets}
-	= kai_hash:update_nodes([{?NODE2, ?INFO}], []),
+    {replaced_buckets, _ReplacedBuckets} =
+	kai_hash:update_nodes([{?NODE2, ?INFO}], []),
 
     Data1 = #data{key=("item-1"), bucket=3, last_modified=now(),
 		  checksum=erlang:md5(<<"value-1">>), flags="0", value=(<<"value-1">>)},

@@ -19,8 +19,8 @@
 	erlc -W -I ../include $<
 
 MODS = kai_config_SUITE kai_log_SUITE kai_hash_SUITE kai_store_SUITE \
-	kai_coordinator_SUITE kai_sync_SUITE kai_membership_SUITE \
-	kai_api_SUITE kai_memcache_SUITE
+	kai_version_SUITE kai_coordinator_SUITE kai_sync_SUITE \
+	kai_membership_SUITE kai_api_SUITE kai_memcache_SUITE
 
 all: compile
 

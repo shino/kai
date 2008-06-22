@@ -26,8 +26,9 @@ test1(_Conf) ->
 			   {number_of_virtual_nodes, 2}]),
     kai_hash:start_link(),
     kai_store:start_link(),
-    kai_api:start_link(),
+    kai_version:start_link(),
     kai_coordinator:start_link(),
+    kai_api:start_link(),
     kai_memcache:start_link(),
 
     timer:sleep(100), % wait for starting kai_memcache
@@ -84,6 +85,7 @@ test1(_Conf) ->
     gen_tcp:close(MemcacheSocket),
 
     kai_coordinator:stop(),
+    kai_version:stop(),
     kai_store:stop(),
     kai_hash:stop(),
     kai_config:stop().

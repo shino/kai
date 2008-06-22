@@ -91,8 +91,7 @@ put(MemcacheSocket, Key, Flags, Bytes) ->
     case gen_tcp:recv(MemcacheSocket, Bytes, ?TIMEOUT_CLIENT) of
         {ok, Value} ->
 	    gen_tcp:recv(MemcacheSocket, 2, ?TIMEOUT_CLIENT),
-	    Data = #data{key=Key, last_modified=now(),
-			 checksum=erlang:md5(Value), flags=Flags, value=Value},
+	    Data = #data{key=Key, flags=Flags, value=Value},
 	    case kai_coordinator:route({put, Data}) of
 		ok ->
 		    gen_tcp:send(MemcacheSocket, "STORED\r\n");
