@@ -27,6 +27,7 @@ test1(_Conf) ->
     kai_hash:start_link(),
     kai_store:start_link(),
     kai_api:start_link(),
+    kai_coordinator:start_link(),
     kai_memcache:start_link(),
 
     timer:sleep(100), % wait for starting kai_memcache
@@ -37,45 +38,52 @@ test1(_Conf) ->
     Value = <<"value-1">>,
     Buf = io_lib:format("set item-1 0 0 ~w\r\n~s\r\n", [?byte_size(Value), Value]),
     gen_tcp:send(MemcacheSocket, Buf),
-    case gen_tcp:recv(MemcacheSocket, 0) of
-	{ok, <<"STORED\r\n">>} -> ok;
-	_ -> ?assert(false)
-    end,
+
+    ?assertEqual(
+       {ok, <<"STORED\r\n">>},
+       gen_tcp:recv(MemcacheSocket, 0)
+      ),
 
     gen_tcp:send(MemcacheSocket, "get item-1\r\n"),
-    case gen_tcp:recv(MemcacheSocket, 0) of
-	{ok, <<"VALUE item-1 0 7\r\n">>} ->
-	    inet:setopts(MemcacheSocket, [{packet, raw}]),
-	    case gen_tcp:recv(MemcacheSocket, ?byte_size(<<"value-1">>)) of
-		{ok, <<"value-1">>} ->
-		    gen_tcp:recv(MemcacheSocket, ?byte_size(<<"\r\nEND\r\n">>));
-		_ -> ?assert(false)
-	    end,
-	    inet:setopts(MemcacheSocket, [{packet, raw}]);
-	_ -> ?assert(false)
-    end,
+
+    ?assertEqual(
+       {ok, <<"VALUE item-1 0 7\r\n">>},
+       gen_tcp:recv(MemcacheSocket, 0)
+      ),
+    inet:setopts(MemcacheSocket, [{packet, raw}]),
+    ?assertEqual(
+       {ok, <<"value-1">>},
+       gen_tcp:recv(MemcacheSocket, ?byte_size(<<"value-1">>))
+      ),
+    gen_tcp:recv(MemcacheSocket, ?byte_size(<<"\r\nEND\r\n">>)),
+    inet:setopts(MemcacheSocket, [{packet, raw}]),
 
     gen_tcp:send(MemcacheSocket, "delete item-1\r\n"),
-    case gen_tcp:recv(MemcacheSocket, 0) of
-	{ok, <<"DELETED\r\n">>} -> ok;
-	_ -> ?assert(false)
-    end,
+
+    ?assertEqual(
+       {ok, <<"DELETED\r\n">>},
+       gen_tcp:recv(MemcacheSocket, 0)
+      ),
 
     gen_tcp:send(MemcacheSocket, "delete item-2\r\n"),
-    case gen_tcp:recv(MemcacheSocket, 0) of
-	{ok, <<"NOT_FOUND\r\n">>} -> ok;
-	_ -> ?assert(false)
-    end,
+
+    ?assertEqual(
+       {ok, <<"NOT_FOUND\r\n">>},
+       gen_tcp:recv(MemcacheSocket, 0)
+      ),
 
     gen_tcp:send(MemcacheSocket, "get item-1\r\n"),
-    case gen_tcp:recv(MemcacheSocket, 0) of
-	{ok, <<"END\r\n">>} -> ok;
-	_ -> ?assert(false)
-    end,
+
+    ?assertEqual(
+       {ok, <<"END\r\n">>},
+       gen_tcp:recv(MemcacheSocket, 0)
+      ),
 
     gen_tcp:send(MemcacheSocket, "quit\r\n"),
+
     gen_tcp:close(MemcacheSocket),
 
+    kai_coordinator:stop(),
     kai_store:stop(),
     kai_hash:stop(),
     kai_config:stop().
