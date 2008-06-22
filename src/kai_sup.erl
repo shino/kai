@@ -26,10 +26,12 @@ init(Args) ->
     Log = {kai_log, {kai_log, start_link, []}, permanent, 1000, worker, [kai_log]},
     Hash = {kai_hash, {kai_hash, start_link, []}, permanent, 1000, worker, [kai_hash]},
     Store = {kai_store, {kai_store, start_link, []}, permanent, 1000, worker, [kai_store]},
+    Version = {kai_version, {kai_version, start_link, []}, permanent, 1000, worker, [kai_version]},
     Coordinator = {kai_coordinator, {kai_coordinator, start_link, []}, permanent, 1000, worker, [kai_coordinator]},
     Sync = {kai_sync, {kai_sync, start_link, []}, permanent, 1000, worker, [kai_sync]},
     Network = {kai_membership, {kai_membership, start_link, []}, permanent, 1000, worker, [kai_membership]},
     Api = {kai_api, {kai_api, start_link, []}, permanent, 1000, worker, [kai_api]},
     Memcache = {kai_memcache, {kai_memcache, start_link, []}, permanent, 1000, worker, [kai_memcache]},
 
-    {ok, {{one_for_one, 3, 10}, [Config, Log, Hash, Store, Coordinator, Sync, Network, Api, Memcache]}}.
+    {ok, {{one_for_one, 3, 10},
+	  [Config, Log, Hash, Store, Version, Coordinator, Sync, Network, Api, Memcache]}}.
