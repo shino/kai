@@ -93,7 +93,7 @@ get(MemcacheSocket, Key) ->
 get_map(Node, Key, Ref, Pid) ->
     case kai_api:get(Node, Key) of
 	{error, Reason} ->
-	    kai_network:check_node(Node),
+	    kai_membership:check_node(Node),
 	    Pid ! {Ref, {error, Reason}};
 	Other ->
 	    Pid ! {Ref, Other}
@@ -155,7 +155,7 @@ put(MemcacheSocket, Key, Flags, Bytes) ->
 put_map(Node, Data, Ref, Pid) ->
     case kai_api:put(Node, Data) of
 	{error, Reason} ->
-	    kai_network:check_node(Node),
+	    kai_membership:check_node(Node),
 	    Pid ! {Ref, {error, Reason}};
 	Other ->
 	    Pid ! {Ref, Other}

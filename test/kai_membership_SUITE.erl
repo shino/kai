@@ -10,7 +10,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(kai_network_SUITE).
+-module(kai_membership_SUITE).
 -compile(export_all).
 
 -include("kai.hrl").
@@ -64,7 +64,7 @@ test1(_Conf) ->
     kai_hash:start_link(),
     kai_store:start_link(),
     kai_sync:start_link(),
-    kai_network:start_link(),
+    kai_membership:start_link(),
 
     {replaced_buckets, _ReplacedBuckets}
 	= kai_hash:update_nodes([{?NODE1, ?INFO}, {?NODE4, ?INFO}], []),
@@ -75,7 +75,7 @@ test1(_Conf) ->
 
     spawn_link(?MODULE, test1_api_start, []),
 
-    kai_network:check_node(?NODE2),
+    kai_membership:check_node(?NODE2),
 
     timer:sleep(100),
 
@@ -86,7 +86,7 @@ test1(_Conf) ->
     {metadata, Metadata} = kai_store:list(3),
     ?assertEqual(0, length(Metadata)),
 
-    kai_network:check_node(?NODE1),
+    kai_membership:check_node(?NODE1),
 
     timer:sleep(100),
 
@@ -104,7 +104,7 @@ test1(_Conf) ->
     ?assertEqual(2, length(NodeList3)),
     ?assertNot(lists:member(?NODE4, NodeList3)),
 
-    kai_network:stop(),
+    kai_membership:stop(),
     kai_sync:stop(),
     kai_store:stop(),
     kai_hash:stop(),

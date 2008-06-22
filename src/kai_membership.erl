@@ -10,7 +10,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(kai_network).
+-module(kai_membership).
 -behaviour(gen_fsm).
 
 -export([start_link/0]).

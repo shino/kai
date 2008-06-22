@@ -59,7 +59,7 @@ proc(ApiSocket) ->
 		    Res = kai_store:delete(Key),
 		    gen_tcp:send(ApiSocket, term_to_binary(Res));
 		{check_node, Node} ->
-		    Res = kai_network:check_node(Node),
+		    Res = kai_membership:check_node(Node),
 		    gen_tcp:send(ApiSocket, term_to_binary(Res));
 		_Unknown ->
 		    gen_tcp:send(ApiSocket, term_to_binary({error, enotsup}))
