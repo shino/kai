@@ -9,21 +9,32 @@
 ## WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
 ## License for the specific language governing permissions and limitations
 ## under the License.
+KAI_VSN=0.1.0
 
-.SUFFIXES: .erl .beam .yrl
+EMULATOR=beam
+EBIN = $(ROOT)/ebin
+INCLUDE = $(ROOT)/include
 
-.erl.beam:
-	erlc -W -I ../include $<
+APP_TARGET = $(EBIN)/kai.app
 
-.yrl.erl:
-	erlc -W -I ../include $<
+ERL_COMPILE_FLAGS += \
+	+warn_unused_vars +nowarn_shadow_vars +warn_unused_import
 
-MODS = kai_config kai_log kai_hash kai_store kai_version kai_coordinator \
-	kai_sync kai_membership kai_api kai_memcache kai_sup kai
+SOURCES = \
+	kai_config kai_log kai_hash kai_store kai_version \
+	kai_coordinator kai_sync kai_membership kai_api kai_memcache kai_sup kai
 
-all: compile
+MODS = ${SOURCES:%=$(EBIN)/%.$(EMULATOR)} $(APP_TARGET)
 
-compile: ${MODS:%=%.beam}
+$(EBIN)/%.$(EMULATOR):%.erl
+	erlc -pa $(EBIN) -W $(ERL_COMPILE_FLAGS) -I$(INCLUDE) -o$(EBIN) $<
+
+all: $(MODS)
+
+$(MODS): $(INCLUDE)/kai.hrl
 
 clean:	
-	rm -rf *.beam erl_crash.dump *~
+	rm -rf $(EBIN)/*.$(EMULATOR) $(APP_TARGET) $(EBIN)/erl_crash.dump *~
+
+$(APP_TARGET): kai.app.src Makefile
+	sed -e 's;%VSN%;$(KAI_VSN);' $< > $@

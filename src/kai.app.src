@@ -1,6 +1,6 @@
 {application, kai, 
  [{description, "Kai - A distributed hashtable like Amazon's Dynamo"},
-  {vsn, "0.1"},
+  {vsn, "%VSN%"},
   {modules, [kai, kai_sup, kai_memcache, kai_api, kai_membership, kai_sync,
 	     kai_coordinator, kai_version, kai_store, kai_hash, kai_config]},
   {registered, [kai_sup, kai_membership, kai_sync, kai_coordinator, 
