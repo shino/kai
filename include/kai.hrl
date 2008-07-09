@@ -12,6 +12,18 @@
 
 -record(data, {key, bucket, last_modified, vector_clocks, checksum, flags, value}).
 
+-record(tcp_server_option, {
+    listen = [{active, false}, binary, {packet, line}, {reuseaddr, true}],
+    port            = 11211,
+    max_connections = 8,
+    max_restarts    = 3,
+    time            = 60,
+    shutdown        = 2000,
+    accept_timeout  = infinity,
+    recv_length     = 0,
+    recv_timeout    = infinity
+}).
+
 -define(error(Data), kai_log:log(error, ?FILE, ?LINE, Data)).
 -define(warning(Data), kai_log:log(warning, ?FILE, ?LINE, Data)).
 -define(info(Data), kai_log:log(info, ?FILE, ?LINE, Data)).

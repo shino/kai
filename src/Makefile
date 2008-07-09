@@ -18,11 +18,13 @@ INCLUDE = $(ROOT)/include
 APP_TARGET = $(EBIN)/kai.app
 
 ERL_COMPILE_FLAGS += \
-	+warn_unused_vars +nowarn_shadow_vars +warn_unused_import
+	+warn_unused_vars +nowarn_shadow_vars +warn_unused_import \
+	+debug_info
 
 SOURCES = \
 	kai_config kai_log kai_hash kai_store kai_version \
-	kai_coordinator kai_sync kai_membership kai_api kai_memcache kai_sup kai
+	kai_coordinator kai_sync kai_membership kai_sup kai \
+	kai_tcp_server kai_api kai_memcache
 
 MODS = ${SOURCES:%=$(EBIN)/%.$(EMULATOR)} $(APP_TARGET)
 

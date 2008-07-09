@@ -14,7 +14,10 @@ ifndef ROOT
 	ROOT=$(shell pwd)
 endif
 
-RUN_TEST = /opt/local/lib/erlang/lib/common_test-1.3.1/priv/bin/run_test
+ERLANG_LIB = /opt/local/lib/erlang/lib
+TEST_SERVER = $(ERLANG_LIB)/test_server-3.2.2
+RUN_TEST = $(ERLANG_LIB)/common_test-1.3.1
+RUN_TEST_CMD = $(RUN_TEST)/priv/bin/run_test
 
 all: subdirs
 
@@ -24,12 +27,14 @@ subdirs:
 test: test_do
 
 test_compile: subdirs
-	cd test; ROOT=$(ROOT) make
+	cd test; \
+		ROOT=$(ROOT) TEST_SERVER=$(TEST_SERVER) RUN_TEST=$(RUN_TEST) make
 
 test_do: test_compile
-	cp ebin/*.beam test/
 	mkdir -p test/log
-	${RUN_TEST} -dir . -logdir test/log
+	${RUN_TEST_CMD} -dir . \
+		-logdir test/log -cover test/kai.coverspec \
+		-I$(ROOT)/include -pa $(ROOT)/ebin
 
 clean:	
 	rm -rf *.beam erl_crash.dump *~

@@ -11,92 +11,90 @@
 % the License.
 
 -module(kai_api).
+-behaviour(kai_tcp_server).
 
 -export([start_link/0]).
--export([init/1, proc/1]).
--export([node_info/1, node_list/1, list/2, get/2, put/2, delete/2, check_node/2]).
+-export([init/1, handle_call/3]).
+-export([
+    node_info/1, node_list/1,
+    list/2, get/2, put/2, delete/2,
+    check_node/2
+]).
 
 -include("kai.hrl").
 
 -define(TIMEOUT, 3000).
 
 start_link() ->
-    proc_lib:start_link(?MODULE, init, [self()]).
-    
-init(Pid) ->
-    proc_lib:init_ack(Pid, {ok, self()}),
-    Port = kai_config:get(port),
-    {ok, ListeningSocket} =
-        gen_tcp:listen(Port, [binary, {packet, 4}, {active, true}, {reuseaddr, true}]),
-    accept(ListeningSocket).
+    kai_tcp_server:start_link(
+        {local, ?MODULE},
+        ?MODULE,
+        [],
+        #tcp_server_option{
+            listen = [binary, {packet, 4}, {active, true}, {reuseaddr, true}],
+            port            = kai_config:get(port),
+            max_connections = kai_config:get(max_connections)
+        }
+    ).
 
-accept(ListeningSocket) ->
-    {ok, ApiSocket} = gen_tcp:accept(ListeningSocket),
-    Pid = spawn(?MODULE, proc, [ApiSocket]), % Don't link
-    gen_tcp:controlling_process(ApiSocket, Pid),
-    accept(ListeningSocket).
+init(_Args) -> {ok, {}}.
 
-proc(ApiSocket) ->
-    receive
-	{tcp, ApiSocket, Bin} ->
-	    case binary_to_term(Bin) of
-		node_info ->
-		    NodeInfo = kai_hash:node_info(),
-		    gen_tcp:send(ApiSocket, term_to_binary(NodeInfo));
-		node_list ->
-		    NodeList = kai_hash:node_list(),
-		    gen_tcp:send(ApiSocket, term_to_binary(NodeList));
-		{list, Bucket} ->
-		    Metadata = kai_store:list(Bucket),
-		    gen_tcp:send(ApiSocket, term_to_binary(Metadata));
-		{get, Key} ->
-		    Data = kai_store:get(Key),
-		    gen_tcp:send(ApiSocket, term_to_binary(Data));
-		{put, Data} when is_record(Data, data) ->
-		    Res = kai_store:put(Data),
-		    gen_tcp:send(ApiSocket, term_to_binary(Res));
-		{delete, Key} ->
-		    Res = kai_store:delete(Key),
-		    gen_tcp:send(ApiSocket, term_to_binary(Res));
-		{check_node, Node} ->
-		    Res = kai_membership:check_node(Node),
-		    gen_tcp:send(ApiSocket, term_to_binary(Res));
-		_Unknown ->
-		    gen_tcp:send(ApiSocket, term_to_binary({error, enotsup}))
-	    end,
-	    proc(ApiSocket);
-	Error ->
-	    Error
-    after ?TIMEOUT ->
-	  {error, etimedout}
-    end.
+handle_call(Socket, Data, State) ->
+    dispatch(Socket, binary_to_term(Data), State).
+
+dispatch(_Socket, node_info, State) ->
+    reply(kai_hash:node_info(), State);
+
+dispatch(_Socket, node_list, State) ->
+    reply(kai_hash:node_list(), State);
+
+dispatch(_Socket, {list, Bucket}, State) ->
+    reply(kai_store:list(Bucket), State);
+
+dispatch(_Socket, {get, Key}, State) ->
+    reply(kai_store:get(Key), State);
+
+dispatch(_Socket, {put, Data}, State) when is_record(Data, data)->
+    reply(kai_store:put(Data), State);
+
+dispatch(_Socket, {delete, Key}, State) ->
+    reply(kai_store:delete(Key), State);
+
+dispatch(_Socket, {check_node, Node}, State) ->
+    reply(kai_membership:check_node(Node), State);
+
+dispatch(_Socket, _Unknown, State) ->
+    reply({error, enotsup}, State).
+
+reply(Data, State) ->
+    {reply, term_to_binary(Data), State}.
 
 recv_response(ApiSocket) ->
     receive
-	{tcp, ApiSocket, Bin} ->
-	    binary_to_term(Bin);
-	{tcp_closed, ApiSocket} ->
-	    {error, econnreset};
-	{error, Reason} ->
-	    {error, Reason}
+        {tcp, ApiSocket, Bin} ->
+            binary_to_term(Bin);
+        {tcp_closed, ApiSocket} ->
+            {error, econnreset};
+        {error, Reason} ->
+            {error, Reason}
 
         % Don't place Other alternative here.  This is to avoid to catch event
-	% messages, '$gen_event' or something like that.  Remember that this
-	% function can be called from gen_fsm/gen_event.
+        % messages, '$gen_event' or something like that.  Remember that this
+        % function can be called from gen_fsm/gen_event.
 
     after ?TIMEOUT ->
-	    {error, etimedout}
+        {error, etimedout}
     end.
 
 send_request({Address, Port}, Message) ->
     case gen_tcp:connect(Address, Port, [binary, {packet, 4}], ?TIMEOUT) of
-	{ok, ApiSocket} ->
-	    gen_tcp:send(ApiSocket, term_to_binary(Message)),
-	    Response = recv_response(ApiSocket),
-	    gen_tcp:close(ApiSocket),
-	    Response;
-	{error, Reason} ->
-	    {error, Reason}
+        {ok, ApiSocket} ->
+            gen_tcp:send(ApiSocket, term_to_binary(Message)),
+            Response = recv_response(ApiSocket),
+            gen_tcp:close(ApiSocket),
+            Response;
+        {error, Reason} ->
+            {error, Reason}
     end.
 
 node_info(Node) ->

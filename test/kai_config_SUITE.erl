@@ -36,4 +36,9 @@ test1(_Conf) ->
        kai_config:get(number_of_virtual_nodes)
       ),
 
+    ?assertEqual(
+       [?NODE1, 16384, 128],
+       kai_config:get([node, number_of_buckets, number_of_virtual_nodes])
+      ),
+
     kai_config:stop().

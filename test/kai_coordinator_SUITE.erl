@@ -20,10 +20,15 @@ all() -> [test1].
 
 test1() -> [].
 test1(_Conf) ->
-    kai_config:start_link([{hostname, "localhost"}, {port, 11011}, {memcache_port, 11211},
-			   {n, 1}, {r, 1}, {w, 1},
-			   {number_of_buckets, 8},
-			   {number_of_virtual_nodes, 2}]),
+    kai_config:start_link([
+        {hostname, "localhost"},
+        {port, 11011},
+        {memcache_port, 11211},
+        {max_connections, 2},
+        {n, 1}, {r, 1}, {w, 1},
+        {number_of_buckets, 8},
+        {number_of_virtual_nodes, 2}
+    ]),
     kai_hash:start_link(),
     kai_store:start_link(),
     kai_version:start_link(),

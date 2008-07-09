@@ -14,19 +14,24 @@
 -behaviour(application).
 
 -export([start/2, stop/1]).
-	
+
 config([], Acc) ->
     Acc;
-config([Key|Rest], Acc) ->	
+config([Key|Rest], Acc) ->
     case application:get_env(kai, Key) of
-	undefined -> config(Rest, Acc);
-	{ok, Value} -> config(Rest, [{Key, Value}|Acc])
+        undefined   -> config(Rest, Acc);
+        {ok, Value} -> config(Rest, [{Key, Value}|Acc])
     end.
 
 start(_Type, _Args) ->
-    Args = config([logfile, hostname, port, memcache_port, n, r, w,
-		   number_of_buckets, number_of_virtual_nodes], []),
+    Args = config([
+        logfile, hostname,
+        port, max_connections,
+        memcache_port, memcache_max_connections,
+        n, r, w,
+        number_of_buckets, number_of_virtual_nodes
+    ], []),
     kai_sup:start_link(Args).
-	
+
 stop(_State) ->
     ok.

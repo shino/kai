@@ -56,13 +56,21 @@ terminate(_Reason, _State) ->
     ets:delete(config),
     ok.
 
-get(Key, State) ->
-    Value = 
+do_get(Key) ->
 	case ets:lookup(config, Key) of
-	    [{Key, V}|_] -> V;
+	    [{Key, Value}|_] -> Value;
 	    _ -> undefined
-	end,
-    {reply, Value, State}.
+	end.
+
+do_get([], ListOfValues) ->
+    lists:reverse(ListOfValues);
+do_get([Key|Rest], ListOfValues) ->
+    do_get(Rest, [do_get(Key)|ListOfValues]).
+
+get(ListOfKeys, State) when is_list(ListOfKeys)->
+    {reply, do_get(ListOfKeys, []), State};
+get(Key, State) ->
+    {reply, do_get(Key), State}.
 
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State};
