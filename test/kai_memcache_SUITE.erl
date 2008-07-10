@@ -41,10 +41,10 @@ test1(_Conf) ->
     timer:sleep(100), % wait for starting kai_memcache
 
     {ok, MemcacheSocket} =
-	gen_tcp:connect({127,0,0,1}, 11211, [binary, {packet, line}, {active, false}]),
+        gen_tcp:connect({127,0,0,1}, 11211, [binary, {packet, line}, {active, false}]),
 
     Value = <<"value-1">>,
-    Buf = io_lib:format("set item-1 0 0 ~w\r\n~s\r\n", [?byte_size(Value), Value]),
+    Buf = io_lib:format("set item-1 0 0 ~w\r\n~s\r\n", [byte_size(Value), Value]),
     gen_tcp:send(MemcacheSocket, Buf),
 
     ?assertEqual(
@@ -61,9 +61,9 @@ test1(_Conf) ->
     inet:setopts(MemcacheSocket, [{packet, raw}]),
     ?assertEqual(
        {ok, <<"value-1">>},
-       gen_tcp:recv(MemcacheSocket, ?byte_size(<<"value-1">>))
+       gen_tcp:recv(MemcacheSocket, byte_size(<<"value-1">>))
       ),
-    gen_tcp:recv(MemcacheSocket, ?byte_size(<<"\r\nEND\r\n">>)),
+    gen_tcp:recv(MemcacheSocket, byte_size(<<"\r\nEND\r\n">>)),
     inet:setopts(MemcacheSocket, [{packet, raw}]),
 
     gen_tcp:send(MemcacheSocket, "delete item-1\r\n"),

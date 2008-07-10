@@ -20,9 +20,13 @@ all() -> [test1].
 
 test1() -> [].
 test1(_Conf) ->
-    kai_config:start_link([{hostname, "localhost"}, {port, 11011}, {n, 2},
-			   {number_of_buckets, 16384}, % 16,384 = 128*64*2
-			   {number_of_virtual_nodes, 128}]),
+    kai_config:start_link([
+        {hostname, "localhost"},
+        {port, 11011},
+        {n, 2},
+        {number_of_buckets, 16384}, % 16,384 = 128*64*2
+        {number_of_virtual_nodes, 128}
+    ]),
     kai_log:start_link(),
 
     kai_log:log(info, ?FILE, ?LINE, "This is information"),

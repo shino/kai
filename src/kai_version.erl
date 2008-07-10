@@ -13,10 +13,12 @@
 -module(kai_version).
 -behaviour(gen_server).
 
--export([start_link/0]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-	 code_change/3]).
--export([stop/0, update/1, order/1]).
+-export([start_link/0, stop/0]).
+-export([update/1, order/1]).
+-export([
+    init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
+    code_change/3
+]).
 
 -include("kai.hrl").
 
@@ -40,9 +42,11 @@ do_order([], UniqData) ->
 do_order([Data|RestData], UniqData) ->
     % TODO: resolve ordering of versions by using VectorClocks
     Checksum = Data#data.checksum,
-    case length(lists:filter(fun(U) -> Checksum =:= U#data.checksum end, UniqData)) of
-	0 -> do_order(RestData, [Data|UniqData]);
-	_ -> do_order(RestData, UniqData)
+    case length(
+        lists:filter(fun(U) -> Checksum =:= U#data.checksum end, UniqData)
+    ) of
+        0 -> do_order(RestData, [Data|UniqData]);
+        _ -> do_order(RestData, UniqData)
     end.
 
 order([Data|Rest], State) ->

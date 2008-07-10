@@ -37,7 +37,11 @@ test1(_Conf) ->
 
     ?assertEqual(
        ok,
-       kai_coordinator:route({put, #data{key="item-1", flags="0", value=(<<"value-1">>)}})
+       kai_coordinator:route({put, #data{
+           key   = "item-1",
+           flags = "0",
+           value = (<<"value-1">>)}
+       })
       ),
 
     ListOfData = kai_coordinator:route({get, "item-1"}),

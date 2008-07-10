@@ -13,10 +13,12 @@
 -module(kai_store).
 -behaviour(gen_server).
 
--export([start_link/0]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-	 code_change/3]).
--export([stop/0, list/1, get/1, put/1, delete/1]).
+-export([start_link/0, stop/0]).
+-export([list/1, get/1, put/1, delete/1]).
+-export([
+    init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
+    code_change/3
+]).
 
 -include("kai.hrl").
 
@@ -34,17 +36,30 @@ terminate(_Reason, _State) ->
     ok.
 
 do_list(Bucket, State) ->
-    Head = #data{key='$1', bucket=Bucket, last_modified='$2', vector_clocks='$3', 
-		 checksum='$4', flags='_', value='_'},
+    Head = #data{
+        key           = '$1',
+        bucket        = Bucket,
+        last_modified = '$2',
+        vector_clocks = '$3', 
+        checksum      = '$4',
+        flags         = '_',
+        value         = '_'
+    },
     Cond = [],
-    Body = [{#data{key='$1', bucket=Bucket, last_modified='$2', vector_clocks='$3', checksum='$4'}}],
+    Body = [{#data{
+        key           = '$1',
+        bucket        = Bucket,
+        last_modified = '$2',
+        vector_clocks = '$3',
+        checksum      = '$4'
+    }}],
     ListOfData = ets:select(data, [{Head, Cond, Body}]),
     {reply, {list_of_data, ListOfData}, State}.
 
 do_get(Key, State) ->
     case ets:lookup(data, Key) of
-	[Data] -> {reply, Data, State};
-	_ -> {reply, undefined, State}
+        [Data] -> {reply, Data, State};
+        _      -> {reply, undefined, State}
     end.
 
 do_put(Data, State) when is_record(Data, data) ->
@@ -53,11 +68,11 @@ do_put(Data, State) when is_record(Data, data) ->
 
 do_delete(Key, State) ->
     case ets:lookup(data, Key) of
-	[_Data] ->
-	    ets:delete(data, Key),
-	    {reply, ok, State};
-	_ ->
-	    {reply, undefined, State}
+        [_Data] ->
+            ets:delete(data, Key),
+            {reply, ok, State};
+        _ ->
+            {reply, undefined, State}
     end.
 
 handle_call(stop, _From, State) ->

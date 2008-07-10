@@ -18,60 +18,90 @@
 
 all() -> [test1].
 
-test1_api_proc(ApiSocket) ->
-    receive
-	{tcp, ApiSocket, Bin} ->
-	    case binary_to_term(Bin) of
-		{list, 0 = _Bucket} ->
-		    ListOfData = [#data{key=("item-4"), bucket=3, last_modified=now(),
-					checksum=erlang:md5(<<"item-4">>)}],
-		    gen_tcp:send(ApiSocket, term_to_binary({list_of_data, ListOfData}));
-		{list, 3 = _Bucket} ->
-		    ListOfData = [#data{key=("item-1"), bucket=3, last_modified=now(),
-					checksum=erlang:md5(<<"item-1">>)},
-				  #data{key=("item-3"), bucket=3, last_modified=now(),
-					checksum=erlang:md5(<<"item-3">>)}],
-		    gen_tcp:send(ApiSocket, term_to_binary({list_of_data, ListOfData}));
-
-		{get, "item-3"} ->
-		    Data = #data{key="item-3", bucket=3, last_modified=now(),
-				 checksum=erlang:md5(<<"value-3">>), flags="0",
-				 value=(<<"value-3">>)},
-		    gen_tcp:send(ApiSocket, term_to_binary(Data));
-		{get, "item-4"} ->
-		    Data = #data{key="item-4", bucket=0, last_modified=now(),
-				 checksum=erlang:md5(<<"value-4">>), flags="0",
-				 value=(<<"value-4">>)},
-		    gen_tcp:send(ApiSocket, term_to_binary(Data))
-	    end,
-            test1_api_proc(ApiSocket)
-    end.
+test1_api_start() ->
+    {ok, ListeningSocket} =
+        gen_tcp:listen(11012, [binary, {packet, 4}, {reuseaddr, true}]),
+    test1_api_accpet(ListeningSocket).
 
 test1_api_accpet(ListeningSocket) ->
     {ok, ApiSocket} = gen_tcp:accept(ListeningSocket),
     Pid = spawn(?MODULE, test1_api_proc, [ApiSocket]),
     gen_tcp:controlling_process(ApiSocket, Pid),
     test1_api_accpet(ListeningSocket).
-	
-test1_api_start() ->
-    {ok, ListeningSocket} =
-	gen_tcp:listen(11012, [binary, {packet, 4}, {reuseaddr, true}]),
-    test1_api_accpet(ListeningSocket).
+    
+test1_api_proc(ApiSocket) ->
+    receive
+        {tcp, ApiSocket, Bin} ->
+            test1_api_send(ApiSocket, binary_to_term(Bin)),
+            test1_api_proc(ApiSocket)
+    end.
+
+test1_api_send(ApiSocket, {list, 0 = _Bucket}) ->
+    Data4 = #data{
+        key           = ("item-4"),
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"item-4">>)
+    },
+    gen_tcp:send(ApiSocket, term_to_binary({list_of_data, [Data4]}));
+test1_api_send(ApiSocket, {list, 3 = _Bucket}) ->
+    Data1 = #data{
+        key           = ("item-1"),
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"item-1">>)
+    },
+    Data3 = #data{
+        key           = ("item-3"),
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"item-3">>)
+    },
+    gen_tcp:send(ApiSocket, term_to_binary({list_of_data, [Data1, Data3]}));
+test1_api_send(ApiSocket, {get, "item-3"}) ->
+    Data3 = #data{
+        key           = "item-3",
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"value-3">>),
+        flags         = "0",
+        value         = (<<"value-3">>)
+    },
+    gen_tcp:send(ApiSocket, term_to_binary(Data3));
+test1_api_send(ApiSocket, {get, "item-4"}) ->
+    Data4 = #data{
+        key           = "item-4",
+        bucket        = 0,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"value-4">>),
+        flags         = "0",
+        value         = (<<"value-4">>)},
+    gen_tcp:send(ApiSocket, term_to_binary(Data4)).    
 
 test1() -> [].
 test1(_Conf) ->
-    kai_config:start_link([{hostname, "localhost"}, {port, 11011}, {n, 3},
-			   {number_of_buckets, 8},
-			   {number_of_virtual_nodes, 2}]),
+    kai_config:start_link([
+        {hostname, "localhost"},
+        {port, 11011},
+        {n, 3},
+        {number_of_buckets, 8},
+        {number_of_virtual_nodes, 2}
+    ]),
     kai_hash:start_link(),
     kai_store:start_link(),
     kai_sync:start_link(),
 
     {replaced_buckets, _ReplacedBuckets} =
-	kai_hash:update_nodes([{?NODE2, ?INFO}], []),
+        kai_hash:update_nodes([{?NODE2, ?INFO}], []),
 
-    Data1 = #data{key=("item-1"), bucket=3, last_modified=now(),
-		  checksum=erlang:md5(<<"value-1">>), flags="0", value=(<<"value-1">>)},
+    Data1 = #data{
+        key           = ("item-1"),
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"value-1">>),
+        flags         = "0",
+        value         = (<<"value-1">>)
+    },
     kai_store:put(Data1),
 
     spawn_link(?MODULE, test1_api_start, []),

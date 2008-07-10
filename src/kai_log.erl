@@ -13,10 +13,12 @@
 -module(kai_log).
 -behaviour(gen_server).
 
--export([start_link/0]).
--export([init/1, terminate/2, handle_cast/2, handle_call/3, handle_info/2,
-	 code_change/3]).
--export([stop/0, log/4]).
+-export([start_link/0, stop/0]).
+-export([log/4]).
+-export([
+    init/1, terminate/2, handle_cast/2, handle_call/3, handle_info/2,
+    code_change/3
+]).
 
 -include("kai.hrl").
 
@@ -27,34 +29,31 @@ start_link() ->
 
 init(_Args) ->
     case kai_config:get(logfile) of
-	undefined ->
-	    {ok, []};
-	File ->
-	    case file:open(File, [write, append]) of
-		{ok, Fd} ->
-		    {ok, [{fd, Fd}]};
-		Error ->
-		    Error
-	    end
+        undefined ->
+            {ok, []};
+        File ->
+            case file:open(File, [write, append]) of
+                {ok, Fd} -> {ok, [{fd, Fd}]};
+                Error    -> Error
+            end
     end.
 
 terminate(_Reason, State) ->
-    case lists:keysearch(fd, 1, State) of
-	{value, {fd, Fd}} ->
-	    file:close(Fd);
-	_ -> ok
+    case proplists:get_value(fd, State) of
+        undefined -> ok;
+        Fd        -> file:close(Fd)
     end.
 
 log(Type, File, Line, Data, State) ->
     {{Year,Month,Day}, {Hour,Minute,Second}} = erlang:localtime(),
     {_MegaSec, _Sec, Usec} = now(),
-    Buf = io_lib:format("~4..0w-~2..0w-~2..0w ~2..0w:~2..0w:~2..0w.~6..0w [~s] ~s:~w: ~p\n",
-			[Year, Month, Day, Hour, Minute, Second, Usec, Type, File, Line, Data]),
-    case lists:keysearch(fd, 1, State) of
-	{value, {fd, Fd}} ->
-	    io:format(Fd, "~s", [Buf]);
-	_ ->
-	    io:format("~s", [Buf])
+    Buf = io_lib:format(
+        "~4..0w-~2..0w-~2..0w ~2..0w:~2..0w:~2..0w.~6..0w [~s] ~s:~w: ~p\n",
+        [Year, Month, Day, Hour, Minute, Second, Usec, Type, File, Line, Data]
+    ),
+    case proplists:get_value(fd, State) of
+        undefined -> io:format(    "~s", [Buf]);
+        Fd        -> io:format(Fd, "~s", [Buf])
     end.
 
 handle_call(stop, _From, State) ->

@@ -13,10 +13,12 @@
 -module(kai_membership).
 -behaviour(gen_fsm).
 
--export([start_link/0]).
--export([init/1, ready/2, handle_event/3, handle_sync_event/4, handle_info/3,
-	 terminate/3, code_change/4]).
--export([stop/0, check_node/1]).
+-export([start_link/0, stop/0]).
+-export([check_node/1]).
+-export([
+    init/1, ready/2, handle_event/3, handle_sync_event/4, handle_info/3,
+    terminate/3, code_change/4
+]).
 
 -include("kai.hrl").
 
@@ -26,7 +28,7 @@
 
 start_link() ->
     gen_fsm:start_link({local, ?SERVER}, ?MODULE, [], _Opts = []).
-	
+    
 init(_Args) ->
     {ok, ready, [], ?TIMER}.
 
@@ -37,35 +39,35 @@ ping_nodes([], AvailableNodes, DownNodes) ->
     {AvailableNodes, DownNodes};
 ping_nodes([Node|Nodes], AvailableNodes, DownNodes) ->
     case kai_api:node_info(Node) of
-	{node_info, Node2, Info} ->
-	    ping_nodes(Nodes, [{Node2, Info}|AvailableNodes], DownNodes);
-	{error, _Reason} ->
-	    ping_nodes(Nodes, AvailableNodes, [Node|DownNodes])
+        {node_info, Node2, Info} ->
+            ping_nodes(Nodes, [{Node2, Info}|AvailableNodes], DownNodes);
+        {error, _Reason} ->
+            ping_nodes(Nodes, AvailableNodes, [Node|DownNodes])
     end.
 
 retrieve_node_list(Node) ->
     case kai_api:node_list(Node) of
-	{node_list, RemoteNodeList} ->
-	    {node_list, LocalNodeList} = kai_hash:node_list(),
-	    NewNodes = RemoteNodeList -- LocalNodeList,
-	    OldNodes = LocalNodeList -- RemoteNodeList,
-	    Nodes = NewNodes ++ OldNodes,
-	    LocalNode = kai_config:get(node),
-	    ping_nodes(Nodes -- [LocalNode], [], []);
-	{error, _Reason} ->
-	    {[], [Node]}
+        {node_list, RemoteNodeList} ->
+            {node_list, LocalNodeList} = kai_hash:node_list(),
+            NewNodes = RemoteNodeList -- LocalNodeList,
+            OldNodes = LocalNodeList  -- RemoteNodeList,
+            Nodes = NewNodes ++ OldNodes,
+            LocalNode = kai_config:get(node),
+            ping_nodes(Nodes -- [LocalNode], [], []);
+        {error, _Reason} ->
+            {[], [Node]}
     end.
 
 sync_buckets([], _LocalNode) ->
     ok;
 sync_buckets([{Bucket, NewNodes, OldNodes}|ReplacedBuckets], LocalNode) ->
     case lists:member(LocalNode, NewNodes) of
-	true -> kai_sync:update_bucket(Bucket);
-	_ -> nop
+        true -> kai_sync:update_bucket(Bucket);
+        _    -> nop
     end,
     case lists:member(LocalNode, OldNodes) of
-	true -> kai_sync:delete_bucket(Bucket);
-	_ -> nop
+        true -> kai_sync:delete_bucket(Bucket);
+        _    -> nop
     end,
     sync_buckets(ReplacedBuckets, LocalNode).
 
@@ -76,7 +78,7 @@ sync_buckets(ReplacedBuckets) ->
 do_check_node({Address, Port}) ->
     {AvailableNodes, DownNodes} = retrieve_node_list({Address, Port}),
     {replaced_buckets, ReplacedBuckets} =
-	kai_hash:update_nodes(AvailableNodes, DownNodes),
+        kai_hash:update_nodes(AvailableNodes, DownNodes),
     sync_buckets(ReplacedBuckets).
 
 ready({check_node, Node}, State) ->
@@ -84,8 +86,8 @@ ready({check_node, Node}, State) ->
     {next_state, ready, State, ?TIMER};
 ready(timeout, State) ->
     case kai_hash:choose_node_randomly() of
-	{node, Node} -> do_check_node(Node);
-	_ -> nop
+        {node, Node} -> do_check_node(Node);
+        _            -> nop
     end,
     {next_state, ready, State, ?TIMER}.
 

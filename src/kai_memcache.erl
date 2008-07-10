@@ -74,7 +74,7 @@ get_response(Data) ->
         Flags = Elem#data.flags,
         Value = Elem#data.value,
         [
-            io_lib:format("VALUE ~s ~s ~w", [Key, Flags, ?byte_size(Value)]),
+            io_lib:format("VALUE ~s ~s ~w", [Key, Flags, byte_size(Value)]),
             "\r\n", Value, "\r\n"
         ]
     end, Data).

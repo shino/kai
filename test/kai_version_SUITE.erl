@@ -22,8 +22,13 @@ test1() -> [].
 test1(_Conf) ->
     kai_version:start_link(),
 
-    Data1 = #data{key="item-1", bucket=3, checksum=erlang:md5(<<"value-1">>),
-		  flags="0", value=(<<"value-1">>)},
+    Data1 = #data{
+        key      = "item-1",
+        bucket   = 3,
+        checksum = erlang:md5(<<"value-1">>),
+        flags    = "0",
+        value    = (<<"value-1">>)
+    },
 
     Data2 = kai_version:update(Data1),
 
@@ -33,8 +38,13 @@ test1(_Conf) ->
 
     ?assertEqual(1, length(ListOfData1)),
 
-    Data3 = #data{key="item-1", bucket=3, checksum=erlang:md5(<<"value-1b">>),
-		  flags="0", value=(<<"value-1b">>)},
+    Data3 = #data{
+        key      = "item-1",
+        bucket   = 3,
+        checksum = erlang:md5(<<"value-1b">>),
+        flags    = "0",
+        value    = (<<"value-1b">>)
+    },
 
     Data4 = kai_version:update(Data3),
 

@@ -13,12 +13,16 @@
 -module(kai_hash).
 -behaviour(gen_server).
 
--export([start_link/0]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-	 code_change/3]).
--export([stop/0, update_nodes/2, find_bucket/1, find_nodes/1,
-	 choose_node_randomly/0, choose_bucket_randomly/0, node_info/0,
-	 node_list/0, virtual_node_list/0, buckets/0]).
+-export([start_link/0, stop/0]).
+-export([
+    update_nodes/2, find_bucket/1, find_nodes/1,
+    choose_node_randomly/0, choose_bucket_randomly/0,
+    node_info/0, node_list/0, virtual_node_list/0, buckets/0
+]).
+-export([
+    init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
+    code_change/3
+]).
 
 -include("kai.hrl").
 
@@ -33,8 +37,8 @@ init(_Args) ->
     ets:new(virtual_node_list, [ordered_set, private, named_table]),
     ets:new(buckets, [set, private, named_table]),
 
-    LocalNode = kai_config:get(node),
-    NumberOfVirtualNode = kai_config:get(number_of_virtual_nodes),
+    [LocalNode, NumberOfVirtualNode] =
+        kai_config:get([node, number_of_virtual_nodes]),
     Info = [{number_of_virtual_nodes, NumberOfVirtualNode}],
     update_nodes([{LocalNode, Info}], [], _State = []),
 
@@ -51,7 +55,7 @@ hash(Key) ->
     HashedKey.
 hash({{N1,N2,N3,N4}, Port}, VirtualNode) ->
     <<HashedKey:?HASH_LEN/integer, _/binary>> =
-	erlang:md5(<<N1,N2,N3,N4,Port:16,VirtualNode:16>>),
+        erlang:md5(<<N1,N2,N3,N4,Port:16,VirtualNode:16>>),
     HashedKey.
 
 bucket_range(NumberOfBuckets) ->
@@ -61,57 +65,71 @@ search_bucket_nodes(_HashedKey, _N, 0, Nodes) ->
     {nodes, lists:reverse(Nodes)};
 search_bucket_nodes(HashedKey, N, I, Nodes) ->
     HashedNode =
-	case ets:next(virtual_node_list, HashedKey) of
-	    '$end_of_table' -> ets:first(virtual_node_list);
-	    Other -> Other
-	end,
+        case ets:next(virtual_node_list, HashedKey) of
+            '$end_of_table' -> ets:first(virtual_node_list);
+            Other           -> Other
+        end,
     [{_HashedNode, Node}|_] = ets:lookup(virtual_node_list, HashedNode),
     Nodes2 =
-	case lists:member(Node, Nodes) of
-	    true -> Nodes;
-	    _ -> [Node|Nodes]
-	end,
+        case lists:member(Node, Nodes) of
+            true -> Nodes;
+            _    -> [Node|Nodes]
+        end,
     case length(Nodes2) of
-	N -> {nodes, lists:reverse(Nodes2)};
-	_ -> search_bucket_nodes(HashedNode, N, I-1, Nodes2)
+        N -> {nodes, lists:reverse(Nodes2)};
+        _ -> search_bucket_nodes(HashedNode, N, I-1, Nodes2)
     end.
 
 update_buckets(-1 = _Bucket, _BucketRange, _N, _SizeOfVirtualNodeList,
-	       ReplacedBuckets) ->
+               ReplacedBuckets) ->
     {replaced_buckets, ReplacedBuckets};
 update_buckets(Bucket, BucketRange, N, MaxSearch, ReplacedBuckets) ->
     {nodes, NewNodes} =
-	search_bucket_nodes(Bucket * BucketRange, N, MaxSearch, []),
+        search_bucket_nodes(Bucket * BucketRange, N, MaxSearch, []),
     case ets:lookup(buckets, Bucket) of
-	[{Bucket, NewNodes}] ->
-	    update_buckets(Bucket-1, BucketRange, N, MaxSearch, ReplacedBuckets);
-	[{Bucket, OldNodes}] ->
-	    ets:insert(buckets, {Bucket, NewNodes}),
-	    ReplacedBucket = {Bucket, NewNodes -- OldNodes, OldNodes -- NewNodes},
-	    update_buckets(Bucket-1, BucketRange, N, MaxSearch, [ReplacedBucket|ReplacedBuckets]);
-	[] ->
-	    ets:insert(buckets, {Bucket, NewNodes}),
-	    ReplacedBucket = {Bucket, NewNodes, []},
-	    update_buckets(Bucket-1, BucketRange, N, MaxSearch, [ReplacedBucket|ReplacedBuckets])
+        [{Bucket, NewNodes}] ->
+            update_buckets(
+                Bucket - 1,
+                BucketRange,
+                N,
+                MaxSearch,
+                ReplacedBuckets
+            );
+        [{Bucket, OldNodes}] ->
+            ets:insert(buckets, {Bucket, NewNodes}),
+            ReplacedBucket =
+                {Bucket, NewNodes -- OldNodes, OldNodes -- NewNodes},
+            update_buckets(
+                Bucket - 1,
+                BucketRange,
+                N,
+                MaxSearch,
+                [ReplacedBucket|ReplacedBuckets]
+            );
+        [] ->
+            ets:insert(buckets, {Bucket, NewNodes}),
+            ReplacedBucket = {Bucket, NewNodes, []},
+            update_buckets(
+                Bucket - 1,
+                BucketRange,
+                N,
+                MaxSearch,
+                [ReplacedBucket|ReplacedBuckets]
+            )
     end.
 
 update_buckets() ->
-    NumberOfBuckets = kai_config:get(number_of_buckets),
+    [NumberOfBuckets, N] = kai_config:get([number_of_buckets, n]),
     BucketRange = bucket_range(NumberOfBuckets),
-    N = kai_config:get(n),
-    {value, {size, NumberOfNodes}} =
-	lists:keysearch(size, 1, ets:info(node_list)),
+    NumberOfNodes = proplists:get_value(size, ets:info(node_list)),
 
     % Don't search other nodes to fill a bucket when NumberOfNodes is 1, since
     % they are never found.
     MaxSearch =
-	case NumberOfNodes of
-	    1 -> 1;
-	    _ ->
-		{value, {size, SizeOfVirtualNodeList}} =
-		    lists:keysearch(size, 1, ets:info(virtual_node_list)),
-		SizeOfVirtualNodeList
-	end,
+        case NumberOfNodes of
+            1 -> 1;
+            _ -> proplists:get_value(size, ets:info(virtual_node_list))
+        end,
 
     update_buckets(NumberOfBuckets-1, BucketRange, N, MaxSearch, []).
 
@@ -119,18 +137,18 @@ add_nodes([]) ->
     ok;
 add_nodes([{Node, Info}|Rest]) ->
     case ets:lookup(node_list, Node) of
-	[{Node, _Info}|_] -> ok;
-	[] ->
-	    ets:insert(node_list, {Node, Info}),
-	    {value, {number_of_virtual_nodes, NumberOfVirtualNodes}} =
-		lists:keysearch(number_of_virtual_nodes, 1, Info),
-	    lists:foreach(
-	      fun(VirtualNode) ->
-		      HashedKey = hash(Node, VirtualNode),
-		      ets:insert(virtual_node_list, {HashedKey, Node})
-	      end,
-	      lists:seq(1, NumberOfVirtualNodes)
-	     )
+        [{Node, _Info}|_] -> ok;
+        [] ->
+            ets:insert(node_list, {Node, Info}),
+            NumberOfVirtualNodes =
+                proplists:get_value(number_of_virtual_nodes, Info),
+            lists:foreach(
+              fun(VirtualNode) ->
+                      HashedKey = hash(Node, VirtualNode),
+                      ets:insert(virtual_node_list, {HashedKey, Node})
+              end,
+              lists:seq(1, NumberOfVirtualNodes)
+             )
     end,
     add_nodes(Rest).
 
@@ -138,32 +156,32 @@ remove_nodes([]) ->
     ok;
 remove_nodes([Node|Rest]) ->
     case ets:lookup(node_list, Node) of
-	[{Node, Info}|_] ->
-	    ets:delete(node_list, Node),
-	    {value, {number_of_virtual_nodes, NumberOfVirtualNodes}} =
-		lists:keysearch(number_of_virtual_nodes, 1, Info),
-	    lists:foreach(
-	      fun(VirtualNode) ->
-		      HashedKey = hash(Node, VirtualNode),
-		      ets:delete(virtual_node_list, HashedKey)
-	      end,
-	      lists:seq(1, NumberOfVirtualNodes)
-	     );
-	[] -> ok
+        [{Node, Info}|_] ->
+            ets:delete(node_list, Node),
+            NumberOfVirtualNodes =
+                proplists:get_value(number_of_virtual_nodes, Info),
+            lists:foreach(
+              fun(VirtualNode) ->
+                      HashedKey = hash(Node, VirtualNode),
+                      ets:delete(virtual_node_list, HashedKey)
+              end,
+              lists:seq(1, NumberOfVirtualNodes)
+             );
+        [] -> ok
     end,
     remove_nodes(Rest).
 
 update_nodes(NodesToAdd, NodesToRemove, State) ->
     Reply =
-	case {NodesToAdd, NodesToRemove} of
-	    {[], []} ->
-		{replaced_buckets, []};
-	    _ ->
-		?info({update, NodesToAdd, NodesToRemove}),
-		add_nodes(NodesToAdd),
-		remove_nodes(NodesToRemove),
-		update_buckets()
-	end,
+        case {NodesToAdd, NodesToRemove} of
+            {[], []} ->
+                {replaced_buckets, []};
+            _ ->
+                ?info({update, NodesToAdd, NodesToRemove}),
+                add_nodes(NodesToAdd),
+                remove_nodes(NodesToRemove),
+                update_buckets()
+        end,
     {reply, Reply, State}.
 
 do_find_bucket(Bucket, NumberOfBuckets) when is_integer(Bucket) ->
@@ -189,8 +207,8 @@ choose_node_randomly(State) ->
     Nodes = ets:select(node_list, [{Head, Cond, Body}]),
     Len = length(Nodes),
     case Len of
-	0 -> {reply, undefined, State};
-	_ -> {reply, {node, lists:nth(random:uniform(Len), Nodes)}, State}
+        0 -> {reply, undefined, State};
+        _ -> {reply, {node, lists:nth(random:uniform(Len), Nodes)}, State}
     end.
 
 inversed_buckets(_Node, -1 = _Bucket, Buckets) ->
@@ -198,8 +216,8 @@ inversed_buckets(_Node, -1 = _Bucket, Buckets) ->
 inversed_buckets(Node, Bucket, Buckets) ->
     [{Bucket, Nodes}|_] = ets:lookup(buckets, Bucket),
     case lists:member(Node, Nodes) of
-	true -> inversed_buckets(Node, Bucket-1, [Bucket|Buckets]);
-	_ -> inversed_buckets(Node, Bucket-1, Buckets)
+        true -> inversed_buckets(Node, Bucket-1, [Bucket|Buckets]);
+        _    -> inversed_buckets(Node, Bucket-1, Buckets)
     end.
 
 inversed_buckets(Node) ->
@@ -211,14 +229,15 @@ choose_bucket_randomly(State) ->
     Buckets = inversed_buckets(LocalNode),
     Len = length(Buckets),
     case Len of
-	0 -> {reply, undefined, State};
-	_ -> {reply, {bucket, lists:nth(random:uniform(Len), Buckets)}, State}
+        0 -> {reply, undefined, State};
+        _ -> {reply, {bucket, lists:nth(random:uniform(Len), Buckets)}, State}
     end.
 
 node_info(State) ->
-    LocalNode = kai_config:get(node),
-    NumberOfVirtualNodes = kai_config:get(number_of_virtual_nodes),
-    Reply = {node_info, LocalNode, [{number_of_virtual_nodes, NumberOfVirtualNodes}]},
+    [LocalNode, NumberOfVirtualNodes] =
+        kai_config:get([node, number_of_virtual_nodes]),
+    Info = [{number_of_virtual_nodes, NumberOfVirtualNodes}],
+    Reply = {node_info, LocalNode, Info},
     {reply, Reply, State}.
 
 node_list(State) ->

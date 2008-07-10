@@ -35,7 +35,7 @@ start_link({_Destination, Name} = SupName, Mod, Args, Option) ->
 
 stop() ->
     case whereis(?MODULE) of
-        Pid when pid(Pid) ->
+        Pid when is_pid(Pid) ->
             exit(Pid, normal),
             ok;
         _ -> not_started

@@ -18,60 +18,75 @@
 
 all() -> [test1].
 
-test1_api_proc(ApiSocket) ->
-    receive
-	{tcp, ApiSocket, Bin} ->
-	    case binary_to_term(Bin) of
-		node_info ->
-		    NodeInfo = {node_info, ?NODE2, ?INFO},
-		    gen_tcp:send(ApiSocket, term_to_binary(NodeInfo));
-		node_list ->
-		    NodeList = [?NODE1, ?NODE2, ?NODE3, ?NODE4],
-		    gen_tcp:send(ApiSocket, term_to_binary({node_list, NodeList}));
-
-		{list, 3 = _Bucket} ->
-		    ListOfData = [#data{key=("item-1"), bucket=3, last_modified=now(),
-					checksum=erlang:md5(<<"item-1">>)}],
-		    gen_tcp:send(ApiSocket, term_to_binary({list_of_data, ListOfData}));
-		{list, _Bucket} ->
-		    gen_tcp:send(ApiSocket, term_to_binary({list_of_data, []}));
-
-		{get, "item-1"} ->
-		    Data = #data{key="item-1", bucket=3, last_modified=now(),
-				 checksum=erlang:md5(<<"value-1">>), flags="0",
-				 value=(<<"value-1">>)},
-		    gen_tcp:send(ApiSocket, term_to_binary(Data))
-	    end,
-            test1_api_proc(ApiSocket)
-    end.
+test1_api_start() ->
+    {ok, ListeningSocket} =
+        gen_tcp:listen(11012, [binary, {packet, 4}, {reuseaddr, true}]),
+    test1_api_accpet(ListeningSocket).
 
 test1_api_accpet(ListeningSocket) ->
     {ok, ApiSocket} = gen_tcp:accept(ListeningSocket),
     Pid = spawn(?MODULE, test1_api_proc, [ApiSocket]),
     gen_tcp:controlling_process(ApiSocket, Pid),
     test1_api_accpet(ListeningSocket).
-	
-test1_api_start() ->
-    {ok, ListeningSocket} =
-	gen_tcp:listen(11012, [binary, {packet, 4}, {reuseaddr, true}]),
-    test1_api_accpet(ListeningSocket).
+
+test1_api_proc(ApiSocket) ->
+    receive
+        {tcp, ApiSocket, Bin} ->
+            test1_api_send(ApiSocket, binary_to_term(Bin)),
+            test1_api_proc(ApiSocket)
+    end.
+
+test1_api_send(ApiSocket, node_info) ->
+    NodeInfo = {node_info, ?NODE2, ?INFO},
+    gen_tcp:send(ApiSocket, term_to_binary(NodeInfo));
+test1_api_send(ApiSocket, node_list) ->
+    NodeList = [?NODE1, ?NODE2, ?NODE3, ?NODE4],
+    gen_tcp:send(ApiSocket, term_to_binary({node_list, NodeList}));
+test1_api_send(ApiSocket, {list, 3 = _Bucket}) ->
+    ListOfData = [#data{
+        key           = ("item-1"),
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"item-1">>)
+    }],
+    gen_tcp:send(ApiSocket, term_to_binary({list_of_data, ListOfData}));
+test1_api_send(ApiSocket, {list, _Bucket}) ->
+    gen_tcp:send(ApiSocket, term_to_binary({list_of_data, []}));
+test1_api_send(ApiSocket, {get, "item-1"}) ->
+    Data = #data{
+        key           = "item-1",
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"value-1">>),
+        flags         = "0",
+        value         = (<<"value-1">>)
+    },
+    gen_tcp:send(ApiSocket, term_to_binary(Data)).
 
 test1() -> [].
 test1(_Conf) ->
     % This is NODE3, not NODE1
-    kai_config:start_link([{hostname, "localhost"}, {port, 11013}, {n, 3},
-			   {number_of_buckets, 8},
-			   {number_of_virtual_nodes, 2}]),
+    kai_config:start_link([
+        {hostname, "localhost"},
+        {port, 11013},
+        {n, 3},
+        {number_of_buckets, 8},
+        {number_of_virtual_nodes, 2}
+    ]),
     kai_hash:start_link(),
     kai_store:start_link(),
     kai_sync:start_link(),
     kai_membership:start_link(),
 
     {replaced_buckets, _ReplacedBuckets}
-	= kai_hash:update_nodes([{?NODE1, ?INFO}, {?NODE4, ?INFO}], []),
+        = kai_hash:update_nodes([{?NODE1, ?INFO}, {?NODE4, ?INFO}], []),
 
-    Data1 = #data{key=("item-1"), bucket=3, last_modified=now(),
-		  checksum=erlang:md5(<<"value-1">>), flags="0", value=(<<"value-1">>)},
+    Data1 = #data{
+        key           = ("item-1"),
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"value-1">>), flags="0", value=(<<"value-1">>)
+    },
     kai_store:put(Data1),
 
     spawn_link(?MODULE, test1_api_start, []),

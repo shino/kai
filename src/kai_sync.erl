@@ -13,10 +13,12 @@
 -module(kai_sync).
 -behaviour(gen_fsm).
 
--export([start_link/0]).
--export([init/1, ready/2, handle_event/3, handle_sync_event/4, handle_info/3,
-	 terminate/3, code_change/4]).
--export([stop/0, update_bucket/1, delete_bucket/1]).
+-export([start_link/0, stop/0]).
+-export([update_bucket/1, delete_bucket/1]).
+-export([
+    init/1, ready/2, handle_event/3, handle_sync_event/4, handle_info/3,
+    terminate/3, code_change/4
+]).
 
 -include("kai.hrl").
 
@@ -26,7 +28,7 @@
 
 start_link() ->
     gen_fsm:start_link({local, ?SERVER}, ?MODULE, [], _Opts = []).
-	
+    
 init(_Args) ->
     {ok, ready, [], ?TIMER}.
 
@@ -38,28 +40,28 @@ retrieve_data(_Node, []) ->
 retrieve_data(Node, [Metadata|Rest]) ->
     Key = Metadata#data.key,
     case kai_store:get(Key) of
-	Data when is_record(Data, data) ->
-	    retrieve_data(Node, Rest);
-	undefined ->
-	    case kai_api:get(Node, Key) of
-		Data when is_record(Data, data) ->
-		    kai_store:put(Data),
-		    retrieve_data(Node, Rest);
-		undefined ->
-		    retrieve_data(Node, Rest);
-		{error, Reason} ->
-		    {error, Reason}
-	    end
+        Data when is_record(Data, data) ->
+            retrieve_data(Node, Rest);
+        undefined ->
+            case kai_api:get(Node, Key) of
+                Data when is_record(Data, data) ->
+                    kai_store:put(Data),
+                    retrieve_data(Node, Rest);
+                undefined ->
+                    retrieve_data(Node, Rest);
+                {error, Reason} ->
+                    {error, Reason}
+            end
     end.
 
 do_update_bucket(_Bucket, []) ->
     {error, enodata};
 do_update_bucket(Bucket, [Node|Rest]) ->
     case kai_api:list(Node, Bucket) of
-	{list_of_data, ListOfData} ->
-	    retrieve_data(Node, ListOfData);
-	{error, _Reason} ->
-	    do_update_bucket(Bucket, Rest)
+        {list_of_data, ListOfData} ->
+            retrieve_data(Node, ListOfData);
+        {error, _Reason} ->
+            do_update_bucket(Bucket, Rest)
     end.
 
 do_update_bucket(Bucket) ->
@@ -84,8 +86,8 @@ ready({delete_bucket, Bucket}, State) ->
     {next_state, ready, State, ?TIMER};
 ready(timeout, State) ->
     case kai_hash:choose_bucket_randomly() of
-	{bucket, Bucket} -> do_update_bucket(Bucket);
-	_ -> nop
+        {bucket, Bucket} -> do_update_bucket(Bucket);
+        _                -> nop
     end,
     {next_state, ready, State, ?TIMER}.
 

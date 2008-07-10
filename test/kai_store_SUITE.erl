@@ -22,8 +22,14 @@ test1() -> [].
 test1(_Conf) ->
     kai_store:start_link(),
 
-    Data1 = #data{key="item-1", bucket=3, last_modified=now(),
-		  checksum=erlang:md5(<<"value-1">>), flags="0", value=(<<"value-1">>)},
+    Data1 = #data{
+        key           = "item-1",
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"value-1">>),
+        flags         = "0",
+        value         = (<<"value-1">>)
+    },
     kai_store:put(Data1),
     ?assertEqual(
        Data1,
@@ -34,16 +40,28 @@ test1(_Conf) ->
        kai_store:get("item-2")
       ),
 
-    Data2 = #data{key="item-2", bucket=1, last_modified=now(),
-		  checksum=erlang:md5(<<"value-2">>), flags="0", value=(<<"value-2">>)},
+    Data2 = #data{
+        key           = "item-2",
+        bucket        = 1,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"value-2">>),
+        flags         = "0",
+        value         = (<<"value-2">>)
+    },
     kai_store:put(Data2),
     ?assertEqual(
        Data2,
        kai_store:get("item-2")
       ),
 
-    Data3 = #data{key="item-3", bucket=3, last_modified=now(),
-		  checksum=erlang:md5(<<"value-3">>), flags="0", value=(<<"value-3">>)},
+    Data3 = #data{
+        key           = "item-3",
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"value-3">>),
+        flags         = "0",
+        value         = (<<"value-3">>)
+    },
     kai_store:put(Data3),
     ?assertEqual(
        Data3,
@@ -62,8 +80,14 @@ test1(_Conf) ->
     ?assert(lists:keymember("item-1", 2, ListOfData3)),
     ?assert(lists:keymember("item-3", 2, ListOfData3)),
     
-    Data1b = #data{key="item-1", bucket=3, last_modified=now(),
-		   checksum=erlang:md5(<<"value-1">>), flags="0", value=(<<"value-1b">>)},
+    Data1b = #data{
+        key           = "item-1",
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"value-1">>),
+        flags         = "0",
+        value         = (<<"value-1b">>)
+    },
     kai_store:put(Data1b),
     ?assertEqual(
        Data1b,
@@ -85,10 +109,17 @@ test1(_Conf) ->
 test2_put(T) ->
     lists:foreach(
       fun(I) -> 
-	      Key = "item-" ++ integer_to_list(I),
-	      Value = list_to_binary("value-" ++ integer_to_list(I)),
-	      Data = #data{key=Key, bucket=3, last_modified=now(), checksum=erlang:md5(Value), flags="0", value=Value},
-	      kai_store:put(Data)
+          Key = "item-" ++ integer_to_list(I),
+          Value = list_to_binary("value-" ++ integer_to_list(I)),
+          Data = #data{
+              key           = Key,
+              bucket        = 3,
+              last_modified = now(),
+              checksum      = erlang:md5(Value),
+              flags         = "0",
+              value         = Value
+          },
+          kai_store:put(Data)
       end,
       lists:seq(1, T)
      ).
@@ -96,8 +127,8 @@ test2_put(T) ->
 test2_get(T) ->
     lists:foreach(
       fun(I) -> 
-	      Key = "item-" ++ integer_to_list(I),
-	      kai_store:get(Key)
+          Key = "item-" ++ integer_to_list(I),
+          kai_store:get(Key)
       end,
       lists:seq(1, T)
      ).

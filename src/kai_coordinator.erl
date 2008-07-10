@@ -13,11 +13,13 @@
 -module(kai_coordinator).
 -behaviour(gen_server).
 
--export([start_link/0]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-	 code_change/3]).
+-export([start_link/0, stop/0]).
+-export([route/1]).
+-export([
+    init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
+    code_change/3
+]).
 -export([map_in_get/4, map_in_put/4, map_in_delete/4]).
--export([stop/0, route/1]).
 
 -include("kai.hrl").
 
@@ -36,12 +38,12 @@ terminate(_Reason, _State) ->
 route({Type, Message}, State) ->
     % TODO: route Message to appropriate coordinator node
     Result =
-	case Type of
-	    get -> coordinate_get(Message);
-	    put -> coordinate_put(Message);
-	    delete -> coordinate_delete(Message);
-	    _Other -> {error, ebadrpc}
-	end,
+        case Type of
+            get    -> coordinate_get(Message);
+            put    -> coordinate_put(Message);
+            delete -> coordinate_delete(Message);
+            _Other -> {error, ebadrpc}
+        end,
     {reply, Result, State}.
 
 coordinate_get(Key) ->
@@ -51,23 +53,22 @@ coordinate_get(Key) ->
       fun(Node) -> spawn(?MODULE, map_in_get, [Node, Key, Ref, self()]) end, % Don't link
       Nodes
      ),
-    N = kai_config:get(n),
-    R = kai_config:get(r),
+    [N, R] = kai_config:get([n, r]),
     case gather_in_get(Ref, N, R, []) of
-	ListOfData when is_list(ListOfData) ->
-	    % TODO: write back recent if multiple versions are found and they can be resolved
-	    kai_version:order(ListOfData);
-	_NoData ->
-	    undefined
+        ListOfData when is_list(ListOfData) ->
+            % TODO: write back recent if multiple versions are found and they can be resolved
+            kai_version:order(ListOfData);
+        _NoData ->
+            undefined
     end.
 
 map_in_get(Node, Key, Ref, Pid) ->
     case kai_api:get(Node, Key) of
-	{error, Reason} ->
-	    kai_membership:check_node(Node),
-	    Pid ! {Ref, {error, Reason}};
-	Other ->
-	    Pid ! {Ref, Other}
+        {error, Reason} ->
+            kai_membership:check_node(Node),
+            Pid ! {Ref, {error, Reason}};
+        Other ->
+            Pid ! {Ref, Other}
     end.
 
 gather_in_get(_Ref, _N, 0, Results) ->
@@ -76,47 +77,51 @@ gather_in_get(_Ref, 0, _R, _Results) ->
     {error, enodata};
 gather_in_get(Ref, N, R, Results) ->
     receive
-	{Ref, Data} when is_record(Data, data) ->
-	    gather_in_get(Ref, N-1, R-1, [Data|Results]);
-	{Ref, undefined} ->
-	    gather_in_get(Ref, N-1, R-1, Results);
-	{Ref, _Other} ->
-	    gather_in_get(Ref, N-1, R, Results)
+        {Ref, Data} when is_record(Data, data) ->
+            gather_in_get(Ref, N-1, R-1, [Data|Results]);
+        {Ref, undefined} ->
+            gather_in_get(Ref, N-1, R-1, Results);
+        {Ref, _Other} ->
+            gather_in_get(Ref, N-1, R, Results)
     after ?TIMEOUT_GATHER ->
-	    Results
+            Results
     end.
 
 coordinate_put(Data) ->
-    Key = Data#data.key,
+    Key   = Data#data.key,
     Flags = Data#data.flags,
     Value = Data#data.value,
     {bucket, Bucket} = kai_hash:find_bucket(Key),
-    {nodes, Nodes} = kai_hash:find_nodes(Bucket),
+    {nodes,  Nodes } = kai_hash:find_nodes(Bucket),
     Ref = make_ref(),
     Data1 =
-	case kai_store:get(Key) of
-	    PreviousData when is_record(PreviousData, data) ->
-		PreviousData;
-	    undefined ->
-		#data{key=Key}
-	end,
+        case kai_store:get(Key) of
+            PreviousData when is_record(PreviousData, data) ->
+                PreviousData;
+            undefined ->
+                #data{key=Key}
+        end,
     Data2 = kai_version:update(Data1),
-    Data3 = Data2#data{bucket=Bucket, checksum=erlang:md5(Value), flags=Flags, value=Value},
+    Data3 = Data2#data{
+        bucket   = Bucket,
+        checksum = erlang:md5(Value),
+        flags    = Flags,
+        value    = Value
+    },
     lists:foreach(
       fun(Node) -> spawn(?MODULE, map_in_put, [Node, Data3, Ref, self()]) end,
       Nodes
      ),
-    N = kai_config:get(n),
-    W = kai_config:get(w),
+    [N, W] = kai_config:get([n, w]),
     gather_in_put(Ref, N, W).
 
 map_in_put(Node, Data, Ref, Pid) ->
     case kai_api:put(Node, Data) of
-	{error, Reason} ->
-	    kai_membership:check_node(Node),
-	    Pid ! {Ref, {error, Reason}};
-	Other ->
-	    Pid ! {Ref, Other}
+        {error, Reason} ->
+            kai_membership:check_node(Node),
+            Pid ! {Ref, {error, Reason}};
+        Other ->
+            Pid ! {Ref, Other}
     end.
 
 gather_in_put(_Ref, _N, 0) ->
@@ -125,12 +130,10 @@ gather_in_put(_Ref, 0, _W) ->
     {error, ebusy};
 gather_in_put(Ref, N, W) ->
     receive
-	{Ref, ok} ->
-	    gather_in_put(Ref, N-1, W-1);
-	{Ref, _Other} ->
-	    gather_in_put(Ref, N-1, W)
+        {Ref, ok}     -> gather_in_put(Ref, N-1, W-1);
+        {Ref, _Other} -> gather_in_put(Ref, N-1, W)
     after ?TIMEOUT_GATHER ->
-	    {error, etimedout}
+            {error, etimedout}
     end.
 
 coordinate_delete(Key) ->
@@ -140,35 +143,34 @@ coordinate_delete(Key) ->
       fun(Node) -> spawn(?MODULE, map_in_delete, [Node, Key, Ref, self()]) end,
       Nodes
      ),
-    N = kai_config:get(n),
-    W = kai_config:get(w),
+    [N, W] = kai_config:get([n, w]),
     gather_in_delete(Ref, N, W, []).
 
 map_in_delete(Node, Key, Ref, Pid) ->
     case kai_api:delete(Node, Key) of
-	{error, Reason} ->
-	    Pid ! {Ref, {error, Reason}};
-	Other ->
-	    Pid ! {Ref, Other}
+        {error, Reason} ->
+            Pid ! {Ref, {error, Reason}};
+        Other ->
+            Pid ! {Ref, Other}
     end.
 
 gather_in_delete(_Ref, _N, 0, Results) ->
     case lists:member(ok, Results) of
-	true -> ok;
-	_ -> undefined
+        true -> ok;
+        _    -> undefined
     end;
 gather_in_delete(_Ref, 0, _W, _Results) ->
     {error, ebusy};
 gather_in_delete(Ref, N, W, Results) ->
     receive
-	{Ref, ok} ->
-	    gather_in_delete(Ref, N-1, W-1, [ok|Results]);
-	{Ref, undefined} ->
-	    gather_in_delete(Ref, N-1, W-1, [undefined|Results]);
-	{Ref, _Other} ->
-	    gather_in_delete(Ref, N-1, W, Results)
+    {Ref, ok} ->
+        gather_in_delete(Ref, N-1, W-1, [ok|Results]);
+    {Ref, undefined} ->
+        gather_in_delete(Ref, N-1, W-1, [undefined|Results]);
+    {Ref, _Other} ->
+        gather_in_delete(Ref, N-1, W, Results)
     after ?TIMEOUT_GATHER ->
-	    {error, etimedout}
+        {error, etimedout}
     end.
 
 handle_call(stop, _From, State) ->
