@@ -35,18 +35,39 @@ init(_Args) ->
 terminate(_Reason, _State) ->
     ok.
 
-route({Type, Message}, State) ->
-    % TODO: route Message to appropriate coordinator node
-    Result =
-        case Type of
-            get    -> coordinate_get(Message);
-            put    -> coordinate_put(Message);
-            delete -> coordinate_delete(Message);
-            _Other -> {error, ebadrpc}
-        end,
-    {reply, Result, State}.
+dispatch({Type, Data} = _Request) ->
+    case Type of
+        get    -> coordinate_get(Data);
+        put    -> coordinate_put(Data);
+        delete -> coordinate_delete(Data);
+        _Other -> {error, ebadrpc}
+    end.    
 
-coordinate_get(Key) ->
+do_route(_Request, []) ->
+    {error, ebusy};
+do_route(Request, [Node|RestNodes]) ->
+    % TODO: introduce TTL, in order to avoid infinite loop
+    case kai_api:route(Node, Request) of
+        {error, _Reason} ->
+            do_route([RestNodes], Request);
+        Results ->
+            Results
+    end.
+
+route({_Type, Data} = Request, State) ->
+    Key = Data#data.key,
+    LocalNode = kai_config:get(node),
+    {nodes, Nodes} = kai_hash:find_nodes(Key),
+    Results =
+        case lists:member(LocalNode, Nodes) of
+            true ->
+                dispatch(Request);
+            false ->
+                do_route(Request, Nodes)
+        end,
+    {reply, Results, State}.
+
+coordinate_get(#data{key=Key} = _Data) ->
     {nodes, Nodes} = kai_hash:find_nodes(Key),
     Ref = make_ref(),
     lists:foreach(
@@ -136,7 +157,7 @@ gather_in_put(Ref, N, W) ->
             {error, etimedout}
     end.
 
-coordinate_delete(Key) ->
+coordinate_delete(#data{key=Key} = _Data) ->
     {nodes, Nodes} = kai_hash:find_nodes(Key),
     Ref = make_ref(),
     lists:foreach(

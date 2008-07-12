@@ -44,7 +44,7 @@ test1(_Conf) ->
        })
       ),
 
-    ListOfData = kai_coordinator:route({get, "item-1"}),
+    ListOfData = kai_coordinator:route({get, #data{key="item-1"}}),
     ?assertEqual(1, length(ListOfData)),
 
     [Data|_] = ListOfData,
@@ -57,17 +57,17 @@ test1(_Conf) ->
 
     ?assertEqual(
        ok,
-       kai_coordinator:route({delete, "item-1"})
+       kai_coordinator:route({delete, #data{key="item-1"}})
       ),
 
     ?assertEqual(
        undefined,
-       kai_coordinator:route({get, "item-1"})
+       kai_coordinator:route({get, #data{key="item-1"}})
       ),
 
     ?assertEqual(
        undefined,
-       kai_coordinator:route({delete, "item-1"})
+       kai_coordinator:route({delete, #data{key="item-1"}})
       ),
 
     kai_coordinator:stop(),

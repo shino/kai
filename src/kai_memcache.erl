@@ -37,7 +37,7 @@ handle_call(Socket, Data, State) ->
     dispatch(Socket, string:tokens(binary_to_list(Data), " \r\n"), State).
 
 dispatch(_Socket, ["get", Key], State) ->
-    case kai_coordinator:route({get, Key}) of
+    case kai_coordinator:route({get, #data{key=Key}}) of
         Data when is_list(Data) ->
             Response = get_response(Data),
             {reply, [Response|"END\r\n"], State};
@@ -57,7 +57,7 @@ dispatch(_Socket, ["set", _Key, _Flags, _Exptime, _Bytes], State) ->
     {reply, <<"CLIENT_ERROR Exptime must be zero.\r\n">>, State};
 
 dispatch(_Socket, ["delete", Key], State) ->
-    case kai_coordinator:route({delete, Key}) of
+    case kai_coordinator:route({delete, #data{key=Key}}) of
         ok        -> {reply, <<"DELETED\r\n">>, State};
         undefined -> {reply, <<"NOT_FOUND\r\n">>, State};
         _Other    ->

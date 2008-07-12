@@ -18,7 +18,7 @@
 -export([
     node_info/1, node_list/1,
     list/2, get/2, put/2, delete/2,
-    check_node/2
+    check_node/2, route/2
 ]).
 
 -include("kai.hrl").
@@ -62,6 +62,9 @@ dispatch(_Socket, {delete, Key}, State) ->
 
 dispatch(_Socket, {check_node, Node}, State) ->
     reply(kai_membership:check_node(Node), State);
+
+dispatch(_Socket, {route, Request}, State) ->
+    reply(kai_coordinator:route(Request), State);
 
 dispatch(_Socket, _Unknown, State) ->
     reply({error, enotsup}, State).
@@ -111,3 +114,5 @@ delete(Node, Key) ->
     send_request(Node, {delete, Key}).
 check_node(Node1, Node2) ->
     send_request(Node1, {check_node, Node2}).
+route(Node, Request) ->
+    send_request(Node, {route, Request}).
