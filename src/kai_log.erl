@@ -47,9 +47,14 @@ terminate(_Reason, State) ->
 log(Type, File, Line, Data, State) ->
     {{Year,Month,Day}, {Hour,Minute,Second}} = erlang:localtime(),
     {_MegaSec, _Sec, Usec} = now(),
+    Data2 =
+        if
+            is_list(Data) -> lists:flatten(Data);
+            true          -> Data
+        end,
     Buf = io_lib:format(
         "~4..0w-~2..0w-~2..0w ~2..0w:~2..0w:~2..0w.~6..0w [~s] ~s:~w: ~p\n",
-        [Year, Month, Day, Hour, Minute, Second, Usec, Type, File, Line, Data]
+        [Year, Month, Day, Hour, Minute, Second, Usec, Type, File, Line, Data2]
     ),
     case proplists:get_value(fd, State) of
         undefined -> io:format(    "~s", [Buf]);

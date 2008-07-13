@@ -29,7 +29,9 @@ test1(_Conf) ->
     ]),
     kai_log:start_link(),
 
-    kai_log:log(info, ?FILE, ?LINE, "This is information"),
+    kai_log:log(info, ?FILE, ?LINE, "This is information log"),
+    kai_log:log(debug, ?FILE, ?LINE,
+                io_lib:format("This is debug log: ~s", ["Hello, World!"])),
     
     kai_log:stop(),
     kai_config:stop().
