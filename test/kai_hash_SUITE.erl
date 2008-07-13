@@ -68,7 +68,7 @@ test1(_Conf) ->
     {virtual_node_list, VirtualNodeList1} = kai_hash:virtual_node_list(),
     ?assertEqual(
        [{2311136591, ?NODE1},
-    {3495790055, ?NODE1}],
+        {3495790055, ?NODE1}],
        VirtualNodeList1
       ),
 
@@ -76,19 +76,19 @@ test1(_Conf) ->
     ?assertEqual(8, length(Buckets1)),
     ?assertEqual([?NODE1], proplists:get_value(0, Buckets1)),
 
-    {replaced_buckets, ReplacedBuckets2}
-    = kai_hash:update_nodes([{?NODE2, ?INFO}, {?NODE3, ?INFO}, {?NODE4, ?INFO}],
-                []),
-
+    {replaced_buckets, ReplacedBuckets2} =
+        kai_hash:update_nodes([{?NODE2, ?INFO}, {?NODE3, ?INFO}, {?NODE4, ?INFO}],
+                              []),
+    
     ?assertEqual(
        [{0, [?NODE3, ?NODE2], []},
-    {1, [?NODE3, ?NODE2], []},
-    {2, [?NODE3, ?NODE2], []},
-    {3, [?NODE2, ?NODE4], []},
-    {4, [?NODE2, ?NODE4], []},
-    {5, [?NODE2, ?NODE4], []},
-    {6, [?NODE3, ?NODE2], []},
-    {7, [?NODE3, ?NODE2], []}],
+        {1, [?NODE3, ?NODE2], []},
+        {2, [?NODE3, ?NODE2], []},
+        {3, [?NODE2, ?NODE4], []},
+        {4, [?NODE2, ?NODE4], []},
+        {5, [?NODE2, ?NODE4], []},
+        {6, [?NODE3, ?NODE2], []},
+        {7, [?NODE3, ?NODE2], []}],
        ReplacedBuckets2
       ),
 
@@ -101,13 +101,13 @@ test1(_Conf) ->
     {virtual_node_list, VirtualNodeList2} = kai_hash:virtual_node_list(),
     ?assertEqual(
        [{1258937939, ?NODE3},
-    {2203089259, ?NODE2},
-    {2311136591, ?NODE1},
-    {2365722681, ?NODE4},
-    {2772605746, ?NODE2},
-    {2978498268, ?NODE4},
-    {3495790055, ?NODE1},
-    {4264647116, ?NODE3}],
+        {2203089259, ?NODE2},
+        {2311136591, ?NODE1},
+        {2365722681, ?NODE4},
+        {2772605746, ?NODE2},
+        {2978498268, ?NODE4},
+        {3495790055, ?NODE1},
+        {4264647116, ?NODE3}],
        VirtualNodeList2
       ),
 
