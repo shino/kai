@@ -61,6 +61,8 @@ test1(_Conf) ->
 
     {node_info, ?NODE1, Info1} = kai_hash:node_info(),
     ?assertEqual(?INFO, Info1),
+    {node_info, ?NODE1, Info1} = kai_hash:node_info(?NODE1),
+    ?assertEqual(?INFO, Info1),
 
     {node_list, NodeList1} = kai_hash:node_list(),
     ?assertEqual([?NODE1], NodeList1),

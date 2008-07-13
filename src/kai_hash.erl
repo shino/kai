@@ -17,7 +17,7 @@
 -export([
     update_nodes/2, find_bucket/1, find_nodes/1,
     choose_node_randomly/0, choose_bucket_randomly/0,
-    node_info/0, node_list/0, virtual_node_list/0, buckets/0
+    node_info/1, node_info/0, node_list/0, virtual_node_list/0, buckets/0
 ]).
 -export([
     init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -233,12 +233,16 @@ choose_bucket_randomly(State) ->
         _ -> {reply, {bucket, lists:nth(random:uniform(Len), Buckets)}, State}
     end.
 
-node_info(State) ->
-    [LocalNode, NumberOfVirtualNodes] =
-        kai_config:get([node, number_of_virtual_nodes]),
-    Info = [{number_of_virtual_nodes, NumberOfVirtualNodes}],
-    Reply = {node_info, LocalNode, Info},
-    {reply, Reply, State}.
+do_node_info(Node, State) ->
+    Head = {Node, '$2'},
+    Cond = [],
+    Body = ['$2'],
+    [Info] = ets:select(node_list, [{Head, Cond, Body}]),
+    {reply, {node_info, Node, Info}, State}.
+
+do_node_info(State) ->
+    LocalNode = kai_config:get(node),
+    do_node_info(LocalNode, State).
 
 node_list(State) ->
     NodeList = ets:tab2list(node_list),
@@ -265,8 +269,10 @@ handle_call(choose_node_randomly, _From, State) ->
     choose_node_randomly(State);
 handle_call(choose_bucket_randomly, _From, State) ->
     choose_bucket_randomly(State);
+handle_call({node_info, Node}, _From, State) ->
+    do_node_info(Node, State);
 handle_call(node_info, _From, State) ->
-    node_info(State);
+    do_node_info(State);
 handle_call(node_list, _From, State) ->
     node_list(State);
 handle_call(virtual_node_list, _From, State) ->
@@ -294,6 +300,8 @@ choose_bucket_randomly() ->
     gen_server:call(?SERVER, choose_bucket_randomly).
 node_info() ->
     gen_server:call(?SERVER, node_info).
+node_info(Node) ->
+    gen_server:call(?SERVER, {node_info, Node}).
 node_list() ->
     gen_server:call(?SERVER, node_list).
 virtual_node_list() ->
