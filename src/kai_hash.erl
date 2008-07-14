@@ -37,9 +37,7 @@ init(_Args) ->
     ets:new(virtual_node_list, [ordered_set, private, named_table]),
     ets:new(buckets, [set, private, named_table]),
 
-    [LocalNode, NumberOfVirtualNode] =
-        kai_config:get([node, number_of_virtual_nodes]),
-    Info = [{number_of_virtual_nodes, NumberOfVirtualNode}],
+    {node_info, LocalNode, Info} = kai_config:node_info(),
     update_nodes([{LocalNode, Info}], [], _State = []),
 
     {ok, _State = []}.

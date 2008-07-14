@@ -206,9 +206,7 @@ test2(_Conf) ->
 
     Nodes =
     lists:map(
-      fun(Port) ->
-              {{{127,0,0,1}, Port}, [{number_of_virtual_nodes, 128}]}
-      end,
+      fun(Port) -> {{{127,0,0,1}, Port}, ?INFO} end,
       lists:seq(2, 63)
      ),
     kai_hash:update_nodes(Nodes, []),

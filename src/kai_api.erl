@@ -43,7 +43,7 @@ handle_call(Socket, Data, State) ->
     dispatch(Socket, binary_to_term(Data), State).
 
 dispatch(_Socket, node_info, State) ->
-    reply(kai_hash:node_info(), State);
+    reply(kai_config:node_info(), State);
 
 dispatch(_Socket, node_list, State) ->
     reply(kai_hash:node_list(), State);
