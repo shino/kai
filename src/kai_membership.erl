@@ -60,14 +60,11 @@ retrieve_node_list(Node) ->
 
 sync_buckets([], _LocalNode) ->
     ok;
-sync_buckets([{Bucket, NewNodes, OldNodes}|ReplacedBuckets], LocalNode) ->
-    case lists:member(LocalNode, NewNodes) of
-        true -> kai_sync:update_bucket(Bucket);
-        _    -> nop
-    end,
-    case lists:member(LocalNode, OldNodes) of
-        true -> kai_sync:delete_bucket(Bucket);
-        _    -> nop
+sync_buckets([{Bucket, NewReplica, OldReplica}|ReplacedBuckets], LocalNode) ->
+    case {NewReplica, OldReplica} of
+        {NewReplica, 0} -> kai_sync:update_bucket(Bucket);
+        {0, OldReplica} -> kai_sync:delete_bucket(Bucket);
+        _               -> nop
     end,
     sync_buckets(ReplacedBuckets, LocalNode).
 

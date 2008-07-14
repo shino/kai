@@ -78,46 +78,49 @@ search_bucket_nodes(HashedKey, N, I, Nodes) ->
         _ -> search_bucket_nodes(HashedNode, N, I-1, Nodes2)
     end.
 
-update_buckets(-1 = _Bucket, _BucketRange, _N, _SizeOfVirtualNodeList,
+lists_index(_Elem, [], _I) ->
+    0;
+lists_index(Elem, [Head|Rest], I) ->
+    case Elem =:= Head of
+        true -> I;
+        _    -> lists_index(Elem, Rest, I+1)
+    end.
+lists_index(Elem, List) ->
+    lists_index(Elem, List, 1).
+
+update_buckets(-1 = _Bucket, _LocalNode, _BucketRange, _N, _MaxSearch,
                ReplacedBuckets) ->
     {replaced_buckets, ReplacedBuckets};
-update_buckets(Bucket, BucketRange, N, MaxSearch, ReplacedBuckets) ->
+update_buckets(Bucket, LocalNode, BucketRange, N, MaxSearch,
+               ReplacedBuckets) ->
     {nodes, NewNodes} =
         search_bucket_nodes(Bucket * BucketRange, N, MaxSearch, []),
     case ets:lookup(buckets, Bucket) of
         [{Bucket, NewNodes}] ->
-            update_buckets(
-                Bucket - 1,
-                BucketRange,
-                N,
-                MaxSearch,
-                ReplacedBuckets
-            );
-        [{Bucket, OldNodes}] ->
+            update_buckets(Bucket-1, LocalNode, BucketRange, N, MaxSearch,
+                           ReplacedBuckets);
+        OldBucket ->
             ets:insert(buckets, {Bucket, NewNodes}),
-            ReplacedBucket =
-                {Bucket, NewNodes -- OldNodes, OldNodes -- NewNodes},
-            update_buckets(
-                Bucket - 1,
-                BucketRange,
-                N,
-                MaxSearch,
-                [ReplacedBucket|ReplacedBuckets]
-            );
-        [] ->
-            ets:insert(buckets, {Bucket, NewNodes}),
-            ReplacedBucket = {Bucket, NewNodes, []},
-            update_buckets(
-                Bucket - 1,
-                BucketRange,
-                N,
-                MaxSearch,
-                [ReplacedBucket|ReplacedBuckets]
-            )
+            NewReplica = lists_index(LocalNode, NewNodes),
+            OldReplica = 
+                case OldBucket of
+                    [{Bucket, OldNodes}] -> lists_index(LocalNode, OldNodes);
+                    []                   -> 0
+                end,
+            ReplacedBuckets2 =
+                case {NewReplica, OldReplica} of
+                    {Replica, Replica} ->
+                        ReplacedBuckets;
+                    _ ->
+                        [{Bucket, NewReplica, OldReplica}|ReplacedBuckets]
+                end,
+            update_buckets(Bucket-1, LocalNode, BucketRange, N, MaxSearch,
+                           ReplacedBuckets2)
     end.
 
 update_buckets() ->
-    [NumberOfBuckets, N] = kai_config:get([number_of_buckets, n]),
+    [LocalNode, N, NumberOfBuckets] =
+        kai_config:get([node, n, number_of_buckets]),
     BucketRange = bucket_range(NumberOfBuckets),
     NumberOfNodes = proplists:get_value(size, ets:info(node_list)),
 
@@ -129,7 +132,7 @@ update_buckets() ->
             _ -> proplists:get_value(size, ets:info(virtual_node_list))
         end,
 
-    update_buckets(NumberOfBuckets-1, BucketRange, N, MaxSearch, []).
+    update_buckets(NumberOfBuckets-1, LocalNode, BucketRange, N, MaxSearch, []).
 
 add_nodes([]) ->
     ok;

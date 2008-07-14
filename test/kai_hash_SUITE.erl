@@ -83,14 +83,7 @@ test1(_Conf) ->
                               []),
     
     ?assertEqual(
-       [{0, [?NODE3, ?NODE2], []},
-        {1, [?NODE3, ?NODE2], []},
-        {2, [?NODE3, ?NODE2], []},
-        {3, [?NODE2, ?NODE4], []},
-        {4, [?NODE2, ?NODE4], []},
-        {5, [?NODE2, ?NODE4], []},
-        {6, [?NODE3, ?NODE2], []},
-        {7, [?NODE3, ?NODE2], []}],
+       [{0,3,1}, {1,3,1}, {2,3,1}, {3,2,1}, {4,2,1}, {5,3,1}, {7,3,1}],
        ReplacedBuckets2
       ),
 
@@ -145,14 +138,7 @@ test1(_Conf) ->
     {replaced_buckets, ReplacedBuckets3} = kai_hash:update_nodes([], [?NODE2]),
 
     ?assertEqual(
-       [{0, [?NODE4], [?NODE2]},
-        {1, [?NODE4], [?NODE2]},
-        {2, [?NODE4], [?NODE2]},
-        {3, [?NODE3], [?NODE2]},
-        {4, [?NODE3], [?NODE2]},
-        {5, [?NODE3], [?NODE2]},
-        {6, [?NODE4], [?NODE2]},
-        {7, [?NODE4], [?NODE2]}],
+       [{0,2,3}, {1,2,3}, {2,2,3}, {3,1,2}, {4,1,2}, {5,2,3}, {7,2,3}],
        ReplacedBuckets3
       ),
 
