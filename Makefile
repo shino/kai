@@ -14,10 +14,9 @@ ifndef ROOT
 	ROOT=$(shell pwd)
 endif
 
-ERLANG_LIB = /opt/local/lib/erlang/lib
-TEST_SERVER = $(ERLANG_LIB)/test_server-3.2.2
-RUN_TEST = $(ERLANG_LIB)/common_test-1.3.1
-RUN_TEST_CMD = $(RUN_TEST)/priv/bin/run_test
+COMMON_TEST_LIB = $(shell erl -noshell -eval 'io:format("~s~n", [code:lib_dir(common_test)]).' -s init stop)
+TEST_SERVER_LIB = $(shell erl -noshell -eval 'io:format("~s~n", [code:lib_dir(test_server)]).' -s init stop)
+RUN_TEST_CMD = $(COMMON_TEST_LIB)/priv/bin/run_test
 
 all: subdirs
 
@@ -28,7 +27,7 @@ test: test_do
 
 test_compile: subdirs
 	cd test; \
-		ROOT=$(ROOT) TEST_SERVER=$(TEST_SERVER) RUN_TEST=$(RUN_TEST) make
+		ROOT=$(ROOT) TEST_SERVER=$(TEST_SERVER_LIB) RUN_TEST=$(COMMON_TEST_LIB) make
 
 test_do: test_compile
 	mkdir -p test/log
