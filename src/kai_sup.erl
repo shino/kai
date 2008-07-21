@@ -64,7 +64,7 @@ init(Args) ->
         permanent, 1000, worker,
         [kai_sync]
     },
-    Network = {
+    Membership = {
         kai_membership,
         {kai_membership, start_link, []},
         permanent, 1000, worker,
@@ -84,5 +84,5 @@ init(Args) ->
     },
     {ok, {{one_for_one, 3, 10}, [
         Config, Log, Hash, Store, Version, Coordinator,
-        Sync, Network, Api, Memcache
+        Sync, Membership, Api, Memcache
     ]}}.
