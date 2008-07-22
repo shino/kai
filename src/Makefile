@@ -24,7 +24,7 @@ ERL_COMPILE_FLAGS += \
 SOURCES = \
 	kai_config kai_log kai_hash kai_store kai_version \
 	kai_coordinator kai_sync kai_membership kai_sup kai \
-	kai_tcp_server kai_api kai_memcache
+	kai_tcp_server kai_api kai_memcache vclock
 
 MODS = ${SOURCES:%=$(EBIN)/%.$(EMULATOR)} $(APP_TARGET)
 
