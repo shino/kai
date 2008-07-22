@@ -35,8 +35,15 @@ test_do: test_compile
 		-logdir test/log -cover test/kai.coverspec \
 		-I$(ROOT)/include -pa $(ROOT)/ebin
 
+test_single: test_compile
+	mkdir -p test/log
+	${RUN_TEST_CMD} -suite $(SUITE) \
+		-logdir test/log -cover test/kai.coverspec \
+		-I$(ROOT)/include -pa $(ROOT)/ebin
+
 clean:	
 	rm -rf *.beam erl_crash.dump *~
 	rm -rf test/log
 	cd src; ROOT=$(ROOT) make clean
 	cd test; ROOT=$(ROOT) make clean
+

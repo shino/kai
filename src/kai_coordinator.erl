@@ -41,7 +41,7 @@ dispatch({Type, Data} = _Request) ->
         put    -> coordinate_put(Data);
         delete -> coordinate_delete(Data);
         _Other -> {error, ebadrpc}
-    end.    
+    end.
 
 do_route(_Request, []) ->
     {error, ebusy};
