@@ -70,6 +70,7 @@ test1(_Conf) ->
        kai_coordinator:route({delete, #data{key="item-1"}})
       ),
 
+    kai_api:stop(),
     kai_coordinator:stop(),
     kai_version:stop(),
     kai_store:stop(),

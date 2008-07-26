@@ -11,7 +11,6 @@
 % the License.
 
 -module(kai_tcp_server_SUITE).
--behaviour(kai_tcp_server).
 -compile(export_all).
 -export([init/1, handle_call/3]). % for echo server
 

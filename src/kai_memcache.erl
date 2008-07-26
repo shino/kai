@@ -13,7 +13,7 @@
 -module(kai_memcache).
 -behaviour(kai_tcp_server).
 
--export([start_link/0]).
+-export([start_link/0, stop/0]).
 -export([init/1, handle_call/3]).
 
 -include("kai.hrl").
@@ -30,6 +30,8 @@ start_link() ->
             max_connections = kai_config:get(memcache_max_connections)
         }
     ).
+
+stop() -> kai_tcp_server:stop(?MODULE).
 
 init(_Args) -> {ok, {}}.
 

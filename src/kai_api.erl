@@ -13,7 +13,7 @@
 -module(kai_api).
 -behaviour(kai_tcp_server).
 
--export([start_link/0]).
+-export([start_link/0, stop/0]).
 -export([init/1, handle_call/3]).
 -export([
     node_info/1, node_list/1,
@@ -36,6 +36,8 @@ start_link() ->
             max_connections = kai_config:get(max_connections)
         }
     ).
+
+stop() -> kai_tcp_server:stop(?MODULE).
 
 init(_Args) -> {ok, {}}.
 

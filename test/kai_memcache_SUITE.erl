@@ -91,6 +91,8 @@ test1(_Conf) ->
 
     gen_tcp:close(MemcacheSocket),
 
+    kai_memcache:stop(),
+    kai_api:stop(),
     kai_coordinator:stop(),
     kai_version:stop(),
     kai_store:stop(),

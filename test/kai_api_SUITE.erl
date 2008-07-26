@@ -62,6 +62,7 @@ test1(_Conf) ->
 
     undefined = kai_api:get(?NODE1, "item-1"),
 
+    kai_api:stop(),
     kai_store:stop(),
     kai_hash:stop(),
     kai_config:stop().

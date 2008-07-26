@@ -14,9 +14,10 @@
 -behaviour(supervisor).
 
 -export([behaviour_info/1]).
--export([start_link/1, start_link/2, start_link/3, start_link/4, stop/0]).
+-export([start_link/1, start_link/2, start_link/3, start_link/4]).
+-export([stop/0, stop/1]).
 -export([init/1, acceptor_init/5]).
--export([acceptor_start_link/4]).
+-export([acceptor_start_link/5]).
 
 -include("kai.hrl").
 
@@ -26,15 +27,16 @@ behaviour_info(_Other)    -> undefined.
 
 % Supervisor - tcp_server
 %% External APIs
-start_link(Mod)       -> start_link(Mod, [], {}).
-start_link(Mod, Args) -> start_link(Mod, Args, {}).
+start_link(Mod)       -> start_link(Mod, []).
+start_link(Mod, Args) -> start_link(Mod, Args, #tcp_server_option{}).
 start_link(Mod, Args, Option) ->
-    supervisor:start_link(?MODULE, [?MODULE, Mod, Args, Option]).
-start_link({_Destination, Name} = SupName, Mod, Args, Option) ->
-    supervisor:start_link(SupName, ?MODULE, [Name, Mod, Args, Option]).
+    start_link({local, ?MODULE}, Mod, Args, Option).
+start_link(Name, Mod, Args, Option) ->
+    supervisor:start_link(Name, ?MODULE, [Name, Mod, Args, Option]).
 
-stop() ->
-    case whereis(?MODULE) of
+stop() -> stop(?MODULE).
+stop(Name) ->
+    case whereis(Name) of
         Pid when is_pid(Pid) ->
             exit(Pid, normal),
             ok;
@@ -61,7 +63,7 @@ listen(State, Name, Mod, Option) ->
             {stop, Reason}
     end.
 
-init_acceptors(ListenSocket, State, Name, Mod, Option) ->
+init_acceptors(ListenSocket, State, {Dest, Name}, Mod, Option) ->
     #tcp_server_option{
         max_connections = MaxConn,
         max_restarts    = MaxRestarts,
@@ -69,31 +71,37 @@ init_acceptors(ListenSocket, State, Name, Mod, Option) ->
         shutdown        = Shutdown
     } = Option,
     {ok, {{one_for_one, MaxRestarts, Time}, lists:map(
-        fun (N) -> {
-            list_to_atom(
-                   atom_to_list(Name)
-                ++ "_acceptor_"
-                ++ integer_to_list(N)
+        fun (N) ->
+            AcceptorName = list_to_atom(
+                atom_to_list(Name) ++ "_acceptor_" ++ integer_to_list(N)
             ),
             {
-                ?MODULE,
-                acceptor_start_link,
-                [ListenSocket, State, Mod, Option]
-            },
-            permanent,
-            Shutdown,
-            worker,
-            []
-        } end,
+                AcceptorName,
+                {
+                    ?MODULE,
+                    acceptor_start_link,
+                    [{Dest, AcceptorName}, ListenSocket, State, Mod, Option]
+                },
+                permanent,
+                Shutdown,
+                worker,
+                []
+            }
+        end,
         lists:seq(1, MaxConn)
     )}}.
 
 % ProcLib - tcp_acceptor_N
 %% External APIs
-acceptor_start_link(ListenSocket, State, Mod, Option) ->
-    proc_lib:start_link(
+acceptor_start_link({Dest, Name}, ListenSocket, State, Mod, Option) ->
+    {ok, Pid} = proc_lib:start_link(
         ?MODULE, acceptor_init, [self(), ListenSocket, State, Mod, Option]
-    ).
+    ),
+    case Dest of
+        local   -> register(Name, Pid);
+        _Global -> global:register_name(Name, Pid)
+    end,
+    {ok, Pid}.
 
 %% Callbacks
 acceptor_init(Parent, ListenSocket, State, Mod, Option) ->
@@ -143,6 +151,8 @@ call_mod(Active, Socket, Data, State, Mod, Option) ->
             acceptor_loop(Active, Socket, State, Mod, Option);
         {noreply, State} ->
             acceptor_loop(Active, Socket, State, Mod, Option);
+        {close, State} ->
+            gen_tcp:close(Socket);
         {close, DataToSend, State} ->
             gen_tcp:send(Socket, DataToSend),
             gen_tcp:close(Socket);
