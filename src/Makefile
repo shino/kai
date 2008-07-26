@@ -9,8 +9,6 @@
 ## WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
 ## License for the specific language governing permissions and limitations
 ## under the License.
-KAI_VSN=0.1.0
-
 EMULATOR=beam
 EBIN = $(ROOT)/ebin
 INCLUDE = $(ROOT)/include
@@ -34,6 +32,9 @@ $(EBIN)/%.$(EMULATOR):%.erl
 all: $(MODS)
 
 $(MODS): $(INCLUDE)/kai.hrl
+
+dialyze:
+	dialyzer --succ_typings -c ${SOURCES:%=%.erl}
 
 clean:	
 	rm -rf $(EBIN)/*.$(EMULATOR) $(APP_TARGET) $(EBIN)/erl_crash.dump *~

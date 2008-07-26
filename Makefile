@@ -9,6 +9,7 @@
 ## WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
 ## License for the specific language governing permissions and limitations
 ## under the License.
+KAI_VSN=0.1.0
 
 ifndef ROOT
 	ROOT=$(shell pwd)
@@ -21,7 +22,7 @@ RUN_TEST_CMD = $(COMMON_TEST_LIB)/priv/bin/run_test
 all: subdirs
 
 subdirs:
-	cd src; ROOT=$(ROOT) make
+	cd src; KAI_VSN=$(KAI_VSN) ROOT=$(ROOT) make
 
 test: test_do
 
@@ -41,9 +42,17 @@ test_single: test_compile
 		-logdir test/log -cover test/kai.coverspec \
 		-I$(ROOT)/include -pa $(ROOT)/ebin
 
+docs:
+	erl -noshell -run edoc_run application "'kai'" \
+		'"."' '[{def,{vsn, "$(KAI_VSN)"}}]'
+
+dialyze:
+	cd src; make dialyze
+
 clean:	
 	rm -rf *.beam erl_crash.dump *~
 	rm -rf test/log
+	rm -rf doc
 	cd src; ROOT=$(ROOT) make clean
 	cd test; ROOT=$(ROOT) make clean
 
