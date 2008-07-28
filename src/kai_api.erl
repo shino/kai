@@ -88,17 +88,19 @@ recv_response(ApiSocket) ->
         % function can be called from gen_fsm/gen_event.
 
     after ?TIMEOUT ->
-        {error, etimedout}
+            ?warning("recv_response/1: timeout"),
+            {error, etimedout}
     end.
 
 send_request({Address, Port}, Message) ->
-    case gen_tcp:connect(Address, Port, [binary, {packet, 4}], ?TIMEOUT) of
+    case gen_tcp:connect(Address, Port, [binary, {packet, 4}, {reuseaddr, true}], ?TIMEOUT) of
         {ok, ApiSocket} ->
             gen_tcp:send(ApiSocket, term_to_binary(Message)),
             Response = recv_response(ApiSocket),
             gen_tcp:close(ApiSocket),
             Response;
         {error, Reason} ->
+            ?warning(io_lib:format("send_request/2: ~p", [{error, Reason}])),
             {error, Reason}
     end.
 

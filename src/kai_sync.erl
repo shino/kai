@@ -50,6 +50,7 @@ retrieve_data(Node, [Metadata|Rest]) ->
                 undefined ->
                     retrieve_data(Node, Rest);
                 {error, Reason} ->
+                    ?warning(io_lib:format("retrieve_data/2: ~p", [{error, Reason}])),
                     {error, Reason}
             end
     end.
@@ -60,7 +61,8 @@ do_update_bucket(Bucket, [Node|Rest]) ->
     case kai_api:list(Node, Bucket) of
         {list_of_data, ListOfData} ->
             retrieve_data(Node, ListOfData);
-        {error, _Reason} ->
+        {error, Reason} ->
+            ?warning(io_lib:format("do_update_bucket/2: ~p", [{error, Reason}])),
             do_update_bucket(Bucket, Rest)
     end.
 

@@ -173,8 +173,9 @@ remove_nodes([Node|Rest]) ->
     remove_nodes(Rest).
 
 update_nodes(NodesToAdd, NodesToRemove, State) ->
+    LocalNode = kai_config:get(node),
     Reply =
-        case {NodesToAdd, NodesToRemove} of
+        case {NodesToAdd, NodesToRemove -- [LocalNode]} of
             {[], []} ->
                 {replaced_buckets, []};
             _ ->
