@@ -26,9 +26,9 @@
     recv_timeout    = infinity
 }).
 
--define(error  (Data), kai_log:log(error, ?FILE, ?LINE, Data)).
--define(warning(Data), kai_log:log(warning, ?FILE, ?LINE, Data)).
--define(info   (Data), kai_log:log(info, ?FILE, ?LINE, Data)).
+-define(error  (Data), kai_log:log(error, self(), ?FILE, ?LINE, Data)).
+-define(warning(Data), kai_log:log(warning, self(), ?FILE, ?LINE, Data)).
+-define(info   (Data), kai_log:log(info, self(), ?FILE, ?LINE, Data)).
 
-%-define(debug(Data), kai_log:log(debug, ?FILE, ?LINE, Data)).
+%-define(debug(Data), kai_log:log(debug, self(), ?FILE, ?LINE, Data)).
 -define(debug(_Data), ok).

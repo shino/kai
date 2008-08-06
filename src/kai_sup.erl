@@ -52,12 +52,6 @@ init(Args) ->
         permanent, 1000, worker,
         [kai_version]
     },
-    Coordinator = {
-        kai_coordinator,
-        {kai_coordinator, start_link, []},
-        permanent, 1000, worker,
-        [kai_coordinator]
-    },
     Sync = {
         kai_sync,
         {kai_sync, start_link, []},
@@ -83,6 +77,5 @@ init(Args) ->
         [kai_memcache]
     },
     {ok, {{one_for_one, 3, 10}, [
-        Config, Log, Hash, Store, Version, Coordinator,
-        Sync, Membership, Api, Memcache
+        Config, Log, Hash, Store, Version, Sync, Membership, Api, Memcache
     ]}}.

@@ -34,7 +34,6 @@ test1(_Conf) ->
     kai_hash:start_link(),
     kai_store:start_link(),
     kai_version:start_link(),
-    kai_coordinator:start_link(),
     kai_api:start_link(),
     kai_memcache:start_link(),
 
@@ -93,7 +92,6 @@ test1(_Conf) ->
 
     kai_memcache:stop(),
     kai_api:stop(),
-    kai_coordinator:stop(),
     kai_version:stop(),
     kai_store:stop(),
     kai_hash:stop(),

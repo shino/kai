@@ -11,29 +11,14 @@
 % the License.
 
 -module(kai_coordinator).
--behaviour(gen_server).
 
--export([start_link/0, stop/0]).
 -export([route/1]).
--export([
-    init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-    code_change/3
-]).
--export([map_in_get/4, map_in_put/4, map_in_delete/4]).
+-export([start_route/3, map_in_get/4, map_in_put/4, map_in_delete/4]).
 
 -include("kai.hrl").
 
 -define(SERVER, ?MODULE).
 -define(TIMEOUT_GATHER, 200).
-
-start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], _Opts = []).
-
-init(_Args) ->
-    {ok, []}.
-
-terminate(_Reason, _State) ->
-    ok.
 
 dispatch({Type, Data} = _Request) ->
     case Type of
@@ -45,28 +30,38 @@ dispatch({Type, Data} = _Request) ->
 
 do_route(_Request, []) ->
     {error, ebusy};
-do_route(Request, [Node|RestNodes]) ->
+do_route({_Type, Data} = Request, [Node|RestNodes]) ->
     % TODO: introduce TTL, in order to avoid infinite loop
     case kai_api:route(Node, Request) of
         {error, Reason} ->
-            ?warning(io_lib:format("do_route/2: ~p", [{error, Reason}])),
+            ?warning(io_lib:format("do_route(~p, ~p): ~p",
+                                   [Data#data.key, Node, {error, Reason}])),
             do_route(Request, RestNodes);
         Results ->
             Results
     end.
 
-route({_Type, Data} = Request, State) ->
-    Key = Data#data.key,
+start_route({_Type, Data} = Request, Pid, Ref) ->
     LocalNode = kai_config:get(node),
-    {nodes, Nodes} = kai_hash:find_nodes(Key),
+    {nodes, Nodes} = kai_hash:find_nodes(Data#data.key),
     Results =
         case lists:member(LocalNode, Nodes) of
-            true ->
-                dispatch(Request);
-            false ->
-                do_route(Request, Nodes)
+            true -> dispatch(Request);
+            _    -> do_route(Request, Nodes)
         end,
-    {reply, Results, State}.
+    Pid ! {Ref, Results}.
+
+route({_Type, Data} = Request) ->
+    Ref = make_ref(),
+    % Though don't know the reason, application exits abnormally if it doesn't
+    % spawn the process
+    spawn(?MODULE, start_route, [Request, self(), Ref]),
+    receive
+        {Ref, Result} -> Result
+    after ?TIMEOUT_GATHER ->
+            ?warning(io_lib:format("route(~p): timeout", [Data#data.key])),
+            []
+    end. 
 
 coordinate_get(#data{key=Key} = _Data) ->
     {nodes, Nodes} = kai_hash:find_nodes(Key),
@@ -87,7 +82,7 @@ coordinate_get(#data{key=Key} = _Data) ->
 map_in_get(Node, Key, Ref, Pid) ->
     case kai_api:get(Node, Key) of
         {error, Reason} ->
-            kai_membership:check_node(Node),
+%            kai_membership:check_node(Node),
             Pid ! {Ref, {error, Reason}};
         Other ->
             Pid ! {Ref, Other}
@@ -141,7 +136,7 @@ coordinate_put(Data) ->
 map_in_put(Node, Data, Ref, Pid) ->
     case kai_api:put(Node, Data) of
         {error, Reason} ->
-            kai_membership:check_node(Node),
+%            kai_membership:check_node(Node),
             Pid ! {Ref, {error, Reason}};
         Other ->
             Pid ! {Ref, Other}
@@ -173,6 +168,7 @@ coordinate_delete(#data{key=Key} = _Data) ->
 map_in_delete(Node, Key, Ref, Pid) ->
     case kai_api:delete(Node, Key) of
         {error, Reason} ->
+%            kai_membership:check_node(Node),
             Pid ! {Ref, {error, Reason}};
         Other ->
             Pid ! {Ref, Other}
@@ -197,19 +193,3 @@ gather_in_delete(Ref, N, W, Results) ->
             ?warning("gather_in_delete/4: timeout"),
         {error, etimedout}
     end.
-
-handle_call(stop, _From, State) ->
-    {stop, normal, stopped, State};
-handle_call({route, Request}, _From, State) ->
-    route(Request, State).
-handle_cast(_Msg, State) ->
-    {noreply, State}.
-handle_info(_Info, State) ->
-    {noreply, State}.
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
-
-stop() ->
-    gen_server:call(?SERVER, stop).
-route(Request) ->
-    gen_server:call(?SERVER, {route, Request}).

@@ -6,8 +6,8 @@
       kai_coordinator, kai_version, kai_store, kai_hash, kai_config
   ]},
   {registered, [
-      kai_sup, kai_membership, kai_sync, kai_coordinator, 
-      kai_version, kai_store, kai_hash, kai_log, kai_config
+      kai_sup, kai_membership, kai_sync, kai_version, kai_store, kai_hash,
+      kai_log, kai_config
   ]},
   {applications, [kernel, stdlib]},
   {mod, {kai, []}},

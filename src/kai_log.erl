@@ -14,7 +14,7 @@
 -behaviour(gen_server).
 
 -export([start_link/0, stop/0]).
--export([log/4]).
+-export([log/5]).
 -export([
     init/1, terminate/2, handle_cast/2, handle_call/3, handle_info/2,
     code_change/3
@@ -44,7 +44,7 @@ terminate(_Reason, State) ->
         Fd        -> file:close(Fd)
     end.
 
-log(Type, File, Line, Data, State) ->
+log(Type, Pid, File, Line, Data, State) ->
     {{Year,Month,Day}, {Hour,Minute,Second}} = erlang:localtime(),
     {_MegaSec, _Sec, Usec} = now(),
     Data2 =
@@ -53,8 +53,8 @@ log(Type, File, Line, Data, State) ->
             true          -> Data
         end,
     Buf = io_lib:format(
-        "~4..0w-~2..0w-~2..0w ~2..0w:~2..0w:~2..0w.~6..0w [~s] ~s:~w: ~p\n",
-        [Year, Month, Day, Hour, Minute, Second, Usec, Type, File, Line, Data2]
+        "~4..0w-~2..0w-~2..0w ~2..0w:~2..0w:~2..0w.~6..0w [~s] (~p) ~s:~w: ~p\n",
+        [Year, Month, Day, Hour, Minute, Second, Usec, Type, Pid, File, Line, Data2]
     ),
     case proplists:get_value(fd, State) of
         undefined -> io:format(    "~s", [Buf]);
@@ -63,8 +63,8 @@ log(Type, File, Line, Data, State) ->
 
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State}.
-handle_cast({log, Type, File, Line, Data}, State) ->
-    log(Type, File, Line, Data, State),
+handle_cast({log, Type, Pid, File, Line, Data}, State) ->
+    log(Type, Pid, File, Line, Data, State),
     {noreply, State}.
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -73,5 +73,5 @@ code_change(_OldVsn, State, _Extra) ->
 
 stop() ->
     gen_server:call(?SERVER, stop).
-log(Type, File, Line, Data) ->
-    gen_server:cast(?SERVER, {log, Type, File, Line, Data}).
+log(Type, Pid, File, Line, Data) ->
+    gen_server:cast(?SERVER, {log, Type, Pid, File, Line, Data}).
