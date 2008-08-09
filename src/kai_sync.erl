@@ -32,7 +32,7 @@ start_link() ->
 init(_Args) ->
     {ok, ready, [], ?TIMER}.
 
-terminate(normal, _StateName, _StateData) ->
+terminate(_Reason, _StateName, _StateData) ->
     ok.
 
 retrieve_data(_Node, []) ->
