@@ -21,7 +21,7 @@ ERL_COMPILE_FLAGS += \
 	+debug_info
 
 SOURCES = \
-	kai_config kai_log kai_hash kai_store kai_version \
+	kai_config kai_hash kai_store kai_version \
 	kai_coordinator kai_sync kai_membership kai_sup kai \
 	kai_tcp_server kai_api kai_memcache vclock
 

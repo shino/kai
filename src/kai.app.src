@@ -7,7 +7,7 @@
   ]},
   {registered, [
       kai_sup, kai_membership, kai_sync, kai_version, kai_store, kai_hash,
-      kai_log, kai_config
+      kai_config
   ]},
   {applications, [kernel, stdlib, sasl]},
   {mod, {kai, []}},

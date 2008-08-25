@@ -28,12 +28,6 @@ init(Args) ->
         permanent, 1000, worker,
         [kai_config]
     },
-    Log = {
-        kai_log,
-        {kai_log, start_link, []},
-        permanent, 1000, worker,
-        [kai_log]
-    },
     Hash = {
         kai_hash,
         {kai_hash, start_link, []},
@@ -77,5 +71,5 @@ init(Args) ->
         [kai_memcache]
     },
     {ok, {{one_for_one, 3, 10}, [
-        Config, Log, Hash, Store, Version, Sync, Membership, Api, Memcache
+        Config, Hash, Store, Version, Sync, Membership, Api, Memcache
     ]}}.
