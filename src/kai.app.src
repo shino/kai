@@ -9,7 +9,7 @@
       kai_sup, kai_membership, kai_sync, kai_version, kai_store, kai_hash,
       kai_log, kai_config
   ]},
-  {applications, [kernel, stdlib]},
+  {applications, [kernel, stdlib, sasl]},
   {mod, {kai, []}},
   {start_phases, []},
   {env, [

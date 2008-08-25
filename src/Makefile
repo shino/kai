@@ -10,10 +10,11 @@
 ## License for the specific language governing permissions and limitations
 ## under the License.
 EMULATOR=beam
-EBIN = $(ROOT)/ebin
-INCLUDE = $(ROOT)/include
+EBIN=$(ROOT)/ebin
+INCLUDE=$(ROOT)/include
 
-APP_TARGET = $(EBIN)/kai.app
+APP=$(EBIN)/kai.app
+CONFIG=$(EBIN)/kai.config
 
 ERL_COMPILE_FLAGS += \
 	+warn_unused_vars +nowarn_shadow_vars +warn_unused_import \
@@ -24,7 +25,7 @@ SOURCES = \
 	kai_coordinator kai_sync kai_membership kai_sup kai \
 	kai_tcp_server kai_api kai_memcache vclock
 
-MODS = ${SOURCES:%=$(EBIN)/%.$(EMULATOR)} $(APP_TARGET)
+MODS = ${SOURCES:%=$(EBIN)/%.$(EMULATOR)} $(APP) $(CONFIG)
 
 $(EBIN)/%.$(EMULATOR):%.erl
 	erlc -pa $(EBIN) -W $(ERL_COMPILE_FLAGS) -I$(INCLUDE) -o$(EBIN) $<
@@ -37,7 +38,10 @@ dialyze:
 	dialyzer --succ_typings -c ${SOURCES:%=%.erl}
 
 clean:	
-	rm -rf $(EBIN)/*.$(EMULATOR) $(APP_TARGET) $(EBIN)/erl_crash.dump *~
+	rm -rf $(EBIN)/*.$(EMULATOR) $(APP) $(CONFIG) $(EBIN)/erl_crash.dump *~
 
-$(APP_TARGET): kai.app.src Makefile
+$(APP): kai.app.src Makefile
 	sed -e 's;%VSN%;$(KAI_VSN);' $< > $@
+
+$(CONFIG): kai.config.src Makefile
+	sed -e 's;%LOGS_DIR%;$(ROOT)/log;' $< > $@

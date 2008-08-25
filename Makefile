@@ -51,6 +51,7 @@ dialyze:
 
 clean:	
 	rm -rf *.beam erl_crash.dump *~
+	rm -rf log/*
 	rm -rf test/log
 	rm -rf doc
 	cd src; ROOT=$(ROOT) make clean
