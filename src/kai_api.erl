@@ -79,12 +79,12 @@ recv_response(ApiSocket, Node, Message) ->
         {tcp, ApiSocket, Bin} ->
             binary_to_term(Bin);
         {tcp_closed, ApiSocket} ->
-            ?warning(io_lib:format("recv_response(~p, ~p): ~p",
-                                   [Node, Message, {error, econnreset}])),
+            ?warning("recv_response(~p, ~p): ~p",
+                     [Node, Message, {error, econnreset}]),
             {error, econnreset};
         {error, Reason} ->
-            ?warning(io_lib:format("recv_response(~p, ~p): ~p",
-                                   [Node, Message, {error, Reason}])),
+            ?warning("recv_response(~p, ~p): ~p",
+                     [Node, Message, {error, Reason}]),
             {error, Reason}
 
         % Don't place Other alternative here.  This is to avoid to catch event
@@ -92,8 +92,8 @@ recv_response(ApiSocket, Node, Message) ->
         % function can be called from gen_fsm/gen_event.
 
     after ?TIMEOUT ->
-            ?warning(io_lib:format("recv_response(~p, ~p): ~p",
-                                   [Node, Message, {error, etimedout}])),
+            ?warning("recv_response(~p, ~p): ~p",
+                     [Node, Message, {error, etimedout}]),
             {error, etimedout}
     end.
 
@@ -107,8 +107,8 @@ send_request({Address, Port} = Node, Message) ->
             gen_tcp:close(ApiSocket),
             Response;
         {error, Reason} ->
-            ?warning(io_lib:format("send_request(~p, ~p): ~p",
-                                   [Node, Message, {error, Reason}])),
+            ?warning("send_request(~p, ~p): ~p",
+                     [Node, Message, {error, Reason}]),
             {error, Reason}
     end.
 

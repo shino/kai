@@ -179,7 +179,10 @@ update_nodes(NodesToAdd, NodesToRemove, State) ->
             {[], []} ->
                 {replaced_buckets, []};
             _ ->
-                ?info({update, NodesToAdd, NodesToRemove}),
+                ?info(
+                    "<update>~nadd:~p~nremove~p~n",
+                    [NodesToAdd, NodesToRemove]
+                ),
                 add_nodes(NodesToAdd),
                 remove_nodes(NodesToRemove),
                 update_buckets()

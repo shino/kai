@@ -42,7 +42,7 @@ ping_nodes([Node|Nodes], AvailableNodes, DownNodes) ->
         {node_info, Node2, Info} ->
             ping_nodes(Nodes, [{Node2, Info}|AvailableNodes], DownNodes);
         {error, Reason} ->
-            ?warning(io_lib:format("ping_nodes/3: ~p", [{error, Reason}])),
+            ?warning("ping_nodes/3: ~p", [{error, Reason}]),
             ping_nodes(Nodes, AvailableNodes, [Node|DownNodes])
     end.
 
@@ -56,7 +56,7 @@ retrieve_node_list(Node) ->
             LocalNode = kai_config:get(node),
             ping_nodes(Nodes -- [LocalNode], [], []);
         {error, Reason} ->
-            ?warning(io_lib:format("retrieve_node_list/1: ~p", [{error, Reason}])),
+            ?warning("retrieve_node_list/1: ~p", [{error, Reason}]),
             {[], [Node]}
     end.
 

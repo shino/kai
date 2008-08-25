@@ -34,8 +34,8 @@ do_route({_Type, Data} = Request, [Node|RestNodes]) ->
     % TODO: introduce TTL, in order to avoid infinite loop
     case kai_api:route(Node, Request) of
         {error, Reason} ->
-            ?warning(io_lib:format("do_route(~p, ~p): ~p",
-                                   [Data#data.key, Node, {error, Reason}])),
+            ?warning("do_route(~p, ~p): ~p",
+                     [Data#data.key, Node, {error, Reason}]),
             do_route(Request, RestNodes);
         Results ->
             Results
@@ -59,7 +59,7 @@ route({_Type, Data} = Request) ->
     receive
         {Ref, Result} -> Result
     after ?TIMEOUT_GATHER ->
-            ?warning(io_lib:format("route(~p): timeout", [Data#data.key])),
+            ?warning("route(~p): timeout", [Data#data.key]),
             []
     end. 
 
@@ -101,7 +101,7 @@ gather_in_get(Ref, N, R, Results) ->
         {Ref, _Other} ->
             gather_in_get(Ref, N-1, R, Results)
     after ?TIMEOUT_GATHER ->
-            ?warning("gather_in_get/4: timeout"),
+            ?warning("gather_in_get/4: timeout", []),
             Results
     end.
 
@@ -151,7 +151,7 @@ gather_in_put(Ref, N, W) ->
         {Ref, ok}     -> gather_in_put(Ref, N-1, W-1);
         {Ref, _Other} -> gather_in_put(Ref, N-1, W)
     after ?TIMEOUT_GATHER ->
-            ?warning("gather_in_put/3: timeout"),
+            ?warning("gather_in_put/3: timeout", []),
             {error, etimedout}
     end.
 
@@ -190,6 +190,6 @@ gather_in_delete(Ref, N, W, Results) ->
     {Ref, _Other} ->
         gather_in_delete(Ref, N-1, W, Results)
     after ?TIMEOUT_GATHER ->
-            ?warning("gather_in_delete/4: timeout"),
+            ?warning("gather_in_delete/4: timeout", []),
         {error, etimedout}
     end.

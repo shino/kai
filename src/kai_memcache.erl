@@ -99,6 +99,6 @@ recv_set_data(Socket, ["set", Key, Flags, "0", Bytes], State) ->
     end.
 
 send_error_and_close(Message, State) ->
-    ?warning(io_lib:format("send_error_and_close/2: ~p", [Message])),
+    ?warning("send_error_and_close/2: ~p", [Message]),
     {close, ["SERVER_ERROR ", Message, "\r\n"], State}.
 

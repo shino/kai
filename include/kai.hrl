@@ -26,9 +26,22 @@
     recv_timeout    = infinity
 }).
 
--define(error  (Data), kai_log:log(error, self(), ?FILE, ?LINE, Data)).
--define(warning(Data), kai_log:log(warning, self(), ?FILE, ?LINE, Data)).
--define(info   (Data), kai_log:log(info, self(), ?FILE, ?LINE, Data)).
+-define(
+  error(Message, Args),
+  error_logger:error_msg(?logger_args(Message, Args))
+).
+-define(
+  warning(Message, Args),
+  error_logger:warning_msg(?logger_args(Message, Args))
+).
+-define(
+  info(Message, Args),
+  error_logger:info_msg(?logger_args(Message, Args))
+).
+-define(logger_args(Message, Args),
+  "node: ~p~npid: ~p~nmodule: ~p~nfile: ~p~nline: ~p~n" ++ Message,
+  [node(), self(), ?MODULE, ?FILE, ?LINE | Args]
+).
 
 %-define(debug(Data), kai_log:log(debug, self(), ?FILE, ?LINE, Data)).
 -define(debug(_Data), ok).
