@@ -109,13 +109,18 @@ acceptor_init(Parent, ListenSocket, State, Mod, Option) ->
     acceptor_accept(ListenSocket, State, Mod, Option).
 
 acceptor_accept(ListenSocket, State, Mod, Option) ->
-    {ok, Socket} = gen_tcp:accept(
+    case gen_tcp:accept(
         ListenSocket, Option#tcp_server_option.accept_timeout
-    ),
-    acceptor_loop(
-        proplists:get_value(active, Option#tcp_server_option.listen),
-        Socket, State, Mod, Option
-    ),
+    ) of
+        {ok, Socket} ->
+            acceptor_loop(
+                proplists:get_value(active, Option#tcp_server_option.listen),
+                Socket, State, Mod, Option
+            );
+        Other -> 
+            ?error("<gen_tcp:accept>~n~p~n", [Other]),
+            timer:sleep(Option#tcp_server_option.accept_error_sleep_time)
+    end,
     acceptor_accept(ListenSocket, State, Mod, Option).
 
 acceptor_loop(false, Socket, State, Mod, Option) ->
