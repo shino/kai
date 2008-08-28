@@ -60,15 +60,16 @@ listen(State, Name, Mod, Option) ->
         {ok, ListenSocket} ->
             init_acceptors(ListenSocket, State, Name, Mod, Option);
         {error, Reason} ->
+            ?warning(io_lib:format("listen(~p) ~p", [Mod, {error, Reason}])),
             {stop, Reason}
     end.
 
 init_acceptors(ListenSocket, State, {Dest, Name}, Mod, Option) ->
     #tcp_server_option{
-        max_connections = MaxConn,
-        max_restarts    = MaxRestarts,
-        time            = Time,
-        shutdown        = Shutdown
+        max_processes = MaxProcesses,
+        max_restarts  = MaxRestarts,
+        time          = Time,
+        shutdown      = Shutdown
     } = Option,
     {ok, {{one_for_one, MaxRestarts, Time}, lists:map(
         fun (N) ->
@@ -88,7 +89,7 @@ init_acceptors(ListenSocket, State, {Dest, Name}, Mod, Option) ->
                 []
             }
         end,
-        lists:seq(1, MaxConn)
+        lists:seq(1, MaxProcesses)
     )}}.
 
 % ProcLib - tcp_acceptor_N
@@ -109,13 +110,18 @@ acceptor_init(Parent, ListenSocket, State, Mod, Option) ->
     acceptor_accept(ListenSocket, State, Mod, Option).
 
 acceptor_accept(ListenSocket, State, Mod, Option) ->
-    {ok, Socket} = gen_tcp:accept(
+    case gen_tcp:accept(
         ListenSocket, Option#tcp_server_option.accept_timeout
-    ),
-    acceptor_loop(
-        proplists:get_value(active, Option#tcp_server_option.listen),
-        Socket, State, Mod, Option
-    ),
+    ) of 
+        {ok, Socket} ->
+            acceptor_loop(
+                proplists:get_value(active, Option#tcp_server_option.listen),
+                Socket, State, Mod, Option
+            );
+        {error, Reason} ->
+            ?warning(io_lib:format("acceptor_accept(~p) ~p", [Mod, {error, Reason}])),
+            timer:sleep(Option#tcp_server_option.accept_error_sleep_time)
+    end,
     acceptor_accept(ListenSocket, State, Mod, Option).
 
 acceptor_loop(false, Socket, State, Mod, Option) ->
@@ -129,6 +135,7 @@ acceptor_loop(false, Socket, State, Mod, Option) ->
         {error, closed} ->
             tcp_closed;
         {error, Reason} ->
+            ?warning(io_lib:format("acceptor_loop(~p) ~p", [Mod, {error, Reason}])),
             exit({error, Reason})
     end;
 

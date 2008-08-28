@@ -22,7 +22,7 @@ test1() -> [].
 test1(_Conf) ->
     kai_config:start_link([
         {hostname, "localhost"},
-        {port, 11011},
+        {api_port, 11011},
         {n, 2},
         {number_of_buckets, 16384},
         {number_of_virtual_nodes, 128}

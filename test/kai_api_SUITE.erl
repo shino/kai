@@ -22,13 +22,14 @@ test1() -> [].
 test1(_Conf) ->
     kai_config:start_link([
         {hostname, "localhost"},
-        {port, 11011},
-        {max_connections, 2},
+        {api_port, 11011},
+        {api_max_processes, 2},
         {n, 3},
         {number_of_buckets, 8},
         {number_of_virtual_nodes, 2}]),
     kai_hash:start_link(),
     kai_store:start_link(),
+    kai_connection:start_link(),
     kai_api:start_link(),
 
     timer:sleep(100), % wait for starting kai_api
@@ -63,6 +64,7 @@ test1(_Conf) ->
     undefined = kai_api:get(?NODE1, "item-1"),
 
     kai_api:stop(),
+    kai_connection:stop(),
     kai_store:stop(),
     kai_hash:stop(),
     kai_config:stop().

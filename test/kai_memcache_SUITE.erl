@@ -23,10 +23,11 @@ test1() -> [].
 test1(_Conf) ->
     kai_config:start_link([
         {hostname, "localhost"},
-        {port, 11011},
-        {max_connections, 2},
+        {api_port, 11011},
+        {api_max_processes, 2},
         {memcache_port, 11211},
-        {memcache_max_connections, 2},
+        {memcache_max_processes, 2},
+        {max_connections, 32},
         {n, 1}, {r, 1}, {w, 1},
         {number_of_buckets, 8},
         {number_of_virtual_nodes, 2}
@@ -34,6 +35,7 @@ test1(_Conf) ->
     kai_hash:start_link(),
     kai_store:start_link(),
     kai_version:start_link(),
+    kai_connection:start_link(),
     kai_api:start_link(),
     kai_memcache:start_link(),
 
@@ -92,6 +94,7 @@ test1(_Conf) ->
 
     kai_memcache:stop(),
     kai_api:stop(),
+    kai_connection:stop(),
     kai_version:stop(),
     kai_store:stop(),
     kai_hash:stop(),

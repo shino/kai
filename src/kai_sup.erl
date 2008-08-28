@@ -52,6 +52,12 @@ init(Args) ->
         permanent, 1000, worker,
         [kai_version]
     },
+    Connection = {
+        kai_connection,
+        {kai_connection, start_link, []},
+        permanent, 1000, worker,
+        [kai_connection]
+    },
     Sync = {
         kai_sync,
         {kai_sync, start_link, []},
@@ -77,5 +83,6 @@ init(Args) ->
         [kai_memcache]
     },
     {ok, {{one_for_one, 3, 10}, [
-        Config, Log, Hash, Store, Version, Sync, Membership, Api, Memcache
+        Config, Log, Hash, Store, Version, Connection, Sync, Membership, Api,
+        Memcache
     ]}}.

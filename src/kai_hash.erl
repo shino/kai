@@ -15,7 +15,7 @@
 
 -export([start_link/0, stop/0]).
 -export([
-    update_nodes/2, find_bucket/1, find_nodes/1,
+    update_nodes/2, find_bucket/1, find_replica/1, find_nodes/1,
     choose_node_randomly/0, choose_bucket_randomly/0,
     node_info/1, node_info/0, node_list/0, virtual_node_list/0, buckets/0
 ]).
@@ -79,7 +79,7 @@ search_bucket_nodes(HashedKey, N, I, Nodes) ->
     end.
 
 lists_index(_Elem, [], _I) ->
-    0;
+    undefined;
 lists_index(Elem, [Head|Rest], I) ->
     case Elem =:= Head of
         true -> I;
@@ -105,7 +105,7 @@ update_buckets(Bucket, LocalNode, BucketRange, N, MaxSearch,
             OldReplica = 
                 case OldBucket of
                     [{Bucket, OldNodes}] -> lists_index(LocalNode, OldNodes);
-                    []                   -> 0
+                    []                   -> undefined
                 end,
             ReplacedBuckets2 =
                 case {NewReplica, OldReplica} of
@@ -195,6 +195,12 @@ find_bucket(KeyOrBucket, State) ->
     NumberOfBuckets = kai_config:get(number_of_buckets),
     {reply, {bucket, do_find_bucket(KeyOrBucket, NumberOfBuckets)}, State}.
 
+find_replica(KeyOrBucket, State) ->
+    LocalNode = kai_config:get(node),
+    {reply, {nodes, Nodes}, State2} = find_nodes(KeyOrBucket, State),
+    Replica = lists_index(LocalNode, Nodes),
+    {reply, {replica, Replica}, State2}.
+
 find_nodes(KeyOrBucket, State) ->
     NumberOfBuckets = kai_config:get(number_of_buckets),
     Bucket = do_find_bucket(KeyOrBucket, NumberOfBuckets),
@@ -265,6 +271,8 @@ handle_call({update_nodes, NodesToAdd, NodesToRemove}, _From, State) ->
     update_nodes(NodesToAdd, NodesToRemove, State);
 handle_call({find_bucket, KeyOrBucket}, _From, State) ->
     find_bucket(KeyOrBucket, State);
+handle_call({find_replica, KeyOrBucket}, _From, State) ->
+    find_replica(KeyOrBucket, State);
 handle_call({find_nodes, KeyOrBucket}, _From, State) ->
     find_nodes(KeyOrBucket, State);
 handle_call(choose_node_randomly, _From, State) ->
@@ -294,6 +302,8 @@ update_nodes(NodesToAdd, NodesToRemove) ->
     gen_server:call(?SERVER, {update_nodes, NodesToAdd, NodesToRemove}).
 find_bucket(KeyOrBucket) ->
     gen_server:call(?SERVER, {find_bucket, KeyOrBucket}).
+find_replica(KeyOrBucket) ->
+    gen_server:call(?SERVER, {find_replica, KeyOrBucket}).
 find_nodes(KeyOrBucket) ->
     gen_server:call(?SERVER, {find_nodes, KeyOrBucket}).
 choose_node_randomly() ->

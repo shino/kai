@@ -52,7 +52,7 @@ test1() -> [].
 test1(_Conf) ->
     kai_config:start_link([
         {hostname, "localhost"},
-        {port, 11011},
+        {api_port, 11011},
         {n, 3},
         {number_of_buckets, 8},
         {number_of_virtual_nodes, 2}
@@ -120,6 +120,9 @@ test1(_Conf) ->
     {bucket, Bucket1} = kai_hash:find_bucket("item-1"),
     ?assertEqual(3, Bucket1),
 
+    {replica, Replica1} = kai_hash:find_replica(Bucket1),
+    ?assertEqual(2, Replica1),
+
     {nodes, Nodes1} = kai_hash:find_nodes(Bucket1),
     ?assertEqual([?NODE2, ?NODE1, ?NODE4], Nodes1),
 
@@ -183,7 +186,7 @@ test2(_Conf) ->
 
     kai_config:start_link([
         {hostname, "localhost"},
-        {port, 1},
+        {api_port, 1},
         {n, 3},
         {number_of_buckets, 16384}, % 16,384 = 128*64*2
         {number_of_virtual_nodes, 128}
@@ -212,7 +215,7 @@ test2(_Conf) ->
 
     {Usec4, _} = timer:tc(kai_hash, choose_bucket_randomly, []),
     io:format("time to choose a bucket randomly: ~p [usec]", [Usec4]),
-    ?assert(Usec4 < 100000),
+    ?assert(Usec4 < 300000),
 
     {Usec5, _} = timer:tc(kai_hash, update, [[], [{{127,0,0,1}, 1}]]),
     io:format("time to remove a node: ~p [usec]", [Usec5]),

@@ -82,13 +82,14 @@ test1() -> [].
 test1(_Conf) ->
     kai_config:start_link([
         {hostname, "localhost"},
-        {port, 11011},
+        {api_port, 11011},
         {n, 3},
         {number_of_buckets, 8},
         {number_of_virtual_nodes, 2}
     ]),
     kai_hash:start_link(),
     kai_store:start_link(),
+    kai_connection:start_link(),
     kai_sync:start_link(),
 
     {replaced_buckets, _ReplacedBuckets} =
@@ -128,6 +129,7 @@ test1(_Conf) ->
     ?assert(lists:keymember("item-4", 2, ListOfData3)),
 
     kai_sync:stop(),
+    kai_connection:stop(),
     kai_store:stop(),
     kai_hash:stop(),
     kai_config:stop().

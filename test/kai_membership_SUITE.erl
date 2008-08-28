@@ -68,13 +68,14 @@ test1(_Conf) ->
     % This is NODE3, not NODE1
     kai_config:start_link([
         {hostname, "localhost"},
-        {port, 11013},
+        {api_port, 11013},
         {n, 3},
         {number_of_buckets, 8},
         {number_of_virtual_nodes, 2}
     ]),
     kai_hash:start_link(),
     kai_store:start_link(),
+    kai_connection:start_link(),
     kai_sync:start_link(),
     kai_membership:start_link(),
 
@@ -122,6 +123,7 @@ test1(_Conf) ->
 
     kai_membership:stop(),
     kai_sync:stop(),
+    kai_connection:stop(),
     kai_store:stop(),
     kai_hash:stop(),
     kai_config:stop().

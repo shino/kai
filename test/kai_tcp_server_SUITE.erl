@@ -25,7 +25,7 @@ all() -> [{sequence, sequences1}].
 
 init_per_testcase(testcase1, Config) ->
     kai_tcp_server:start_link(
-        ?MODULE, [], #tcp_server_option{max_connections=1}
+        ?MODULE, [], #tcp_server_option{max_processes=1}
     ),
     Config;
 

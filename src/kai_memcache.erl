@@ -26,8 +26,8 @@ start_link() ->
         ?MODULE,
         [],
         #tcp_server_option{
-            port            = kai_config:get(memcache_port),
-            max_connections = kai_config:get(memcache_max_connections)
+            port          = kai_config:get(memcache_port),
+            max_processes = kai_config:get(memcache_max_processes)
         }
     ).
 

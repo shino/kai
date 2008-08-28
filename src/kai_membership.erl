@@ -64,9 +64,9 @@ sync_buckets([], _LocalNode) ->
     ok;
 sync_buckets([{Bucket, NewReplica, OldReplica}|ReplacedBuckets], LocalNode) ->
     case {NewReplica, OldReplica} of
-        {NewReplica, 0} -> kai_sync:update_bucket(Bucket);
-        {0, OldReplica} -> kai_sync:delete_bucket(Bucket);
-        _               -> nop
+        {NewReplica, undefined } -> kai_sync:update_bucket(Bucket);
+        {undefined,  OldReplica} -> kai_sync:delete_bucket(Bucket);
+        _                        -> nop
     end,
     sync_buckets(ReplacedBuckets, LocalNode).
 

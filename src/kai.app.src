@@ -2,21 +2,23 @@
  [{description, "Kai - A distributed hashtable like Amazon's Dynamo"},
   {vsn, "%VSN%"},
   {modules, [
-      kai, kai_sup, kai_memcache, kai_api, kai_membership, kai_sync,
-      kai_coordinator, kai_version, kai_store, kai_hash, kai_config
+      kai, kai_sup, kai_memcache, kai_api, kai_tcp_server, kai_coordinator,
+      kai_membership, kai_sync, kai_connection, kai_version, kai_store,
+      kai_hash, kai_log, kai_config
   ]},
   {registered, [
-      kai_sup, kai_membership, kai_sync, kai_version, kai_store, kai_hash,
-      kai_log, kai_config
+      kai_sup, kai_membership, kai_sync, kai_connection, kai_version, kai_store,
+      kai_hash, kai_log, kai_config
   ]},
   {applications, [kernel, stdlib]},
   {mod, {kai, []}},
   {start_phases, []},
   {env, [
-      {port, 11011},
-      {max_connections, 30},
+      {api_port, 11011},
+      {api_max_processes, 30},
       {memcache_port, 11211},
-      {memcache_max_connections, 10},
+      {memcache_max_processes, 10},
+      {max_connections, 32},
       {n, 3}, {r, 2}, {w, 2},
       {number_of_buckets, 1024},
       {number_of_virtual_nodes, 128}

@@ -32,8 +32,8 @@ start_link() ->
         [],
         #tcp_server_option{
             listen = [binary, {packet, 4}, {active, true}, {reuseaddr, true}],
-            port            = kai_config:get(port),
-            max_connections = kai_config:get(max_connections)
+            port          = kai_config:get(api_port),
+            max_processes = kai_config:get(api_max_processes)
         }
     ).
 
@@ -74,17 +74,13 @@ dispatch(_Socket, _Unknown, State) ->
 reply(Data, State) ->
     {reply, term_to_binary(Data), State}.
 
-recv_response(ApiSocket, Node, Message) ->
+recv_response(ApiSocket) ->
     receive
         {tcp, ApiSocket, Bin} ->
-            binary_to_term(Bin);
+            {ok, binary_to_term(Bin)};
         {tcp_closed, ApiSocket} ->
-            ?warning(io_lib:format("recv_response(~p, ~p): ~p",
-                                   [Node, Message, {error, econnreset}])),
             {error, econnreset};
         {error, Reason} ->
-            ?warning(io_lib:format("recv_response(~p, ~p): ~p",
-                                   [Node, Message, {error, Reason}])),
             {error, Reason}
 
         % Don't place Other alternative here.  This is to avoid to catch event
@@ -92,23 +88,38 @@ recv_response(ApiSocket, Node, Message) ->
         % function can be called from gen_fsm/gen_event.
 
     after ?TIMEOUT ->
-            ?warning(io_lib:format("recv_response(~p, ~p): ~p",
-                                   [Node, Message, {error, etimedout}])),
-            {error, etimedout}
+            {error, timeout}
     end.
 
-send_request({Address, Port} = Node, Message) ->
-    case gen_tcp:connect(
-        Address, Port, [binary, {packet, 4}, {reuseaddr, true}], ?TIMEOUT
-    ) of
+do_request(Node, Message) ->
+    case kai_connection:lease(Node, self()) of
         {ok, ApiSocket} ->
-            gen_tcp:send(ApiSocket, term_to_binary(Message)),
-            Response = recv_response(ApiSocket, Node, Message),
-            gen_tcp:close(ApiSocket),
-            Response;
+            case gen_tcp:send(ApiSocket, term_to_binary(Message)) of
+                ok ->
+                    case recv_response(ApiSocket) of
+                        {ok, Result} ->
+                            kai_connection:return(ApiSocket),
+                            {ok, Result};
+                        {error, Reason} ->
+                            kai_connection:close(ApiSocket),
+                            {error, Reason}
+                    end;
+                {error, Reason} ->
+                    kai_connection:close(ApiSocket),
+                    {error, Reason}
+            end;
         {error, Reason} ->
-            ?warning(io_lib:format("send_request(~p, ~p): ~p",
+            {error, Reason}
+    end.
+
+request(Node, Message) ->
+    case do_request(Node, Message) of
+        {ok, Result} ->
+            Result;
+        {error, Reason} ->
+            ?warning(io_lib:format("request(~p, ~p): ~p",
                                    [Node, Message, {error, Reason}])),
+%            kai_membership:check_node(Node),
             {error, Reason}
     end.
 
@@ -119,47 +130,47 @@ is_local_node(Node) ->
 node_info(Node) ->
     case is_local_node(Node) of
         true -> kai_config:node_info();
-        _    -> send_request(Node, node_info)
+        _    -> request(Node, node_info)
     end.
 
 node_list(Node) ->
     case is_local_node(Node) of
         true -> kai_hash:node_list();
-        _    -> send_request(Node, node_list)
+        _    -> request(Node, node_list)
     end.
 
 list(Node, Bucket) ->
     case is_local_node(Node) of
         true -> kai_store:list(Bucket);
-        _    -> send_request(Node, {list, Bucket})
+        _    -> request(Node, {list, Bucket})
     end.
 
 get(Node, Key) ->
     case is_local_node(Node) of
         true -> kai_store:get(Key);
-        _    -> send_request(Node, {get, Key})
+        _    -> request(Node, {get, Key})
     end.
 
 put(Node, Data) ->
     case is_local_node(Node) of
         true -> kai_store:put(Data);
-        _    -> send_request(Node, {put, Data})
+        _    -> request(Node, {put, Data})
     end.
 
 delete(Node, Key) ->
     case is_local_node(Node) of
         true -> kai_store:delete(Key);
-        _    -> send_request(Node, {delete, Key})
+        _    -> request(Node, {delete, Key})
     end.
 
 check_node(Node, Node2) ->
     case is_local_node(Node) of
         true -> kai_membership:check_node(Node2);
-        _    -> send_request(Node, {check_node, Node2})
+        _    -> request(Node, {check_node, Node2})
     end.
 
 route(Node, Request) ->
     case is_local_node(Node) of
         true -> {error, ewouldblock};
-        _    -> send_request(Node, {route, Request})
+        _    -> request(Node, {route, Request})
     end.
