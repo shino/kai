@@ -23,7 +23,6 @@
 -include("kai.hrl").
 
 -define(SERVER, ?MODULE).
--define(TIMEOUT, 3000).
 
 -record(connection, {node, available, socket}).
 

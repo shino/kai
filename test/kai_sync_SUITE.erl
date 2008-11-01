@@ -39,7 +39,7 @@ test1_api_proc(ApiSocket) ->
 test1_api_send(ApiSocket, {list, 0 = _Bucket}) ->
     Data4 = #data{
         key           = ("item-4"),
-        bucket        = 3,
+        bucket        = 0,
         last_modified = now(),
         checksum      = erlang:md5(<<"item-4">>)
     },
@@ -58,7 +58,7 @@ test1_api_send(ApiSocket, {list, 3 = _Bucket}) ->
         checksum      = erlang:md5(<<"item-3">>)
     },
     gen_tcp:send(ApiSocket, term_to_binary({list_of_data, [Data1, Data3]}));
-test1_api_send(ApiSocket, {get, "item-3"}) ->
+test1_api_send(ApiSocket, {get, #data{key="item-3", bucket=3}}) ->
     Data3 = #data{
         key           = "item-3",
         bucket        = 3,
@@ -68,7 +68,7 @@ test1_api_send(ApiSocket, {get, "item-3"}) ->
         value         = (<<"value-3">>)
     },
     gen_tcp:send(ApiSocket, term_to_binary(Data3));
-test1_api_send(ApiSocket, {get, "item-4"}) ->
+test1_api_send(ApiSocket, {get, #data{key="item-4", bucket=0}}) ->
     Data4 = #data{
         key           = "item-4",
         bucket        = 0,
@@ -82,10 +82,11 @@ test1() -> [].
 test1(_Conf) ->
     kai_config:start_link([
         {hostname, "localhost"},
-        {api_port, 11011},
+        {rpc_port, 11011},
         {n, 3},
         {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2}
+        {number_of_virtual_nodes, 2},
+        {store, ets}
     ]),
     kai_hash:start_link(),
     kai_store:start_link(),

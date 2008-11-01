@@ -41,7 +41,7 @@ init(Args) ->
             H         -> H
         end,
     {ok, Address} = inet:getaddr(Hostname, inet),
-    Port = proplists:get_value(api_port, Args),
+    Port = proplists:get_value(rpc_port, Args),
     ets:insert(config, {node, {Address, Port}}),
 
     NumberOfBuckets = proplists:get_value(number_of_buckets, Args),

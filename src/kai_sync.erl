@@ -23,8 +23,6 @@
 -include("kai.hrl").
 
 -define(SERVER, ?MODULE).
--define(TIMEOUT, 3000).
--define(TIMER, 1000).
 
 start_link() ->
     gen_fsm:start_link({local, ?SERVER}, ?MODULE, [], _Opts = []).
@@ -38,12 +36,11 @@ terminate(_Reason, _StateName, _StateData) ->
 retrieve_data(_Node, []) ->
     ok;
 retrieve_data(Node, [Metadata|Rest]) ->
-    Key = Metadata#data.key,
-    case kai_store:get(Key) of
+    case kai_store:get(Metadata) of
         Data when is_record(Data, data) ->
             retrieve_data(Node, Rest);
         undefined ->
-            case kai_api:get(Node, Key) of
+            case kai_rpc:get(Node, Metadata) of
                 Data when is_record(Data, data) ->
                     kai_store:put(Data),
                     retrieve_data(Node, Rest);
@@ -58,7 +55,7 @@ retrieve_data(Node, [Metadata|Rest]) ->
 do_update_bucket(_Bucket, []) ->
     {error, enodata};
 do_update_bucket(Bucket, [Node|Rest]) ->
-    case kai_api:list(Node, Bucket) of
+    case kai_rpc:list(Node, Bucket) of
         {list_of_data, ListOfData} ->
             retrieve_data(Node, ListOfData);
         {error, Reason} ->
@@ -74,7 +71,7 @@ do_update_bucket(Bucket) ->
 do_delete_bucket([]) ->
     ok;
 do_delete_bucket([Metadata|Rest]) ->
-    kai_store:delete(Metadata#data.key),
+    kai_store:delete(Metadata),
     do_delete_bucket(Rest);
 do_delete_bucket(Bucket) ->
     {list_of_data, ListOfData} = kai_store:list(Bucket),
@@ -96,7 +93,7 @@ ready(timeout, State) ->
 handle_event(stop, _StateName, StateData) ->
     {stop, normal, StateData}.
 handle_sync_event(_Event, _From, _StateName, StateData) ->
-    {next_state, wait, StateData, 3000}.
+    {next_state, wait, StateData, ?TIMEOUT}.
 handle_info(_Info, _StateName, StateData) ->
     {next_state, ready, StateData, ?TIMER}.
 code_change(_OldVsn, _StateName, StateData, _Extra) ->

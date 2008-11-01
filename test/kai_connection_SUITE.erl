@@ -44,7 +44,7 @@ test1() -> [].
 test1(_Conf) ->
     kai_config:start_link([
         {hostname, "localhost"},
-        {api_port, 11011},
+        {rpc_port, 11011},
         {max_connections, 32},
         {n, 3},
         {number_of_buckets, 8},
@@ -95,7 +95,7 @@ test2(_Conf) ->
 
     kai_config:start_link([
         {hostname, "localhost"},
-        {api_port, 11011},
+        {rpc_port, 11011},
         {max_connections, MaxConnections},
         {n, 3},
         {number_of_buckets, 8},

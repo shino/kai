@@ -70,11 +70,11 @@ init(Args) ->
         permanent, 1000, worker,
         [kai_membership]
     },
-    Api = {
-        kai_api,
-        {kai_api, start_link, []},
+    Rpc = {
+        kai_rpc,
+        {kai_rpc, start_link, []},
         permanent, 1000, worker,
-        [kai_api]
+        [kai_rpc]
     },
     Memcache = {
         kai_memcache,
@@ -83,6 +83,6 @@ init(Args) ->
         [kai_memcache]
     },
     {ok, {{one_for_one, 3, 10}, [
-        Config, Log, Hash, Store, Version, Connection, Sync, Membership, Api,
+        Config, Log, Hash, Store, Version, Connection, Sync, Membership, Rpc,
         Memcache
     ]}}.

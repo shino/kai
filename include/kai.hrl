@@ -33,3 +33,6 @@
 
 %-define(debug(Data), kai_log:log(debug, self(), ?FILE, ?LINE, Data)).
 -define(debug(_Data), ok).
+
+-define(TIMEOUT, 5000).
+-define(TIMER, 1000).

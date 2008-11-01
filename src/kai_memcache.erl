@@ -18,7 +18,7 @@
 
 -include("kai.hrl").
 
--define(TIMEOUT_CLIENT, 3000).
+-define(MEMCACHE_TIMEOUT, ?TIMEOUT).
 
 start_link() ->
     kai_tcp_server:start_link(
@@ -82,9 +82,9 @@ get_response(Data) ->
     end, Data).
  
 recv_set_data(Socket, ["set", Key, Flags, "0", Bytes], State) ->
-    case gen_tcp:recv(Socket, list_to_integer(Bytes), ?TIMEOUT_CLIENT) of
+    case gen_tcp:recv(Socket, list_to_integer(Bytes), ?MEMCACHE_TIMEOUT) of
         {ok, Value} ->
-            gen_tcp:recv(Socket, 2, ?TIMEOUT_CLIENT),
+            gen_tcp:recv(Socket, 2, ?MEMCACHE_TIMEOUT),
             case kai_coordinator:route(
                 {put, #data{key=Key, flags=Flags, value=Value}}
             ) of

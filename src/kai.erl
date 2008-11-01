@@ -26,11 +26,12 @@ config([Key|Rest], Acc) ->
 start(_Type, _Args) ->
     Args = config([
         logfile, hostname,
-        api_port, api_max_processes,
+        rpc_port, rpc_max_processes,
         memcache_port, memcache_max_processes,
         max_connections,
         n, r, w,
-        number_of_buckets, number_of_virtual_nodes
+        number_of_buckets, number_of_virtual_nodes,
+        store, dets_dir, number_of_tables
     ], []),
     kai_sup:start_link(Args).
 

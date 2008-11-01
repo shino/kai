@@ -52,7 +52,7 @@ test1() -> [].
 test1(_Conf) ->
     kai_config:start_link([
         {hostname, "localhost"},
-        {api_port, 11011},
+        {rpc_port, 11011},
         {n, 3},
         {number_of_buckets, 8},
         {number_of_virtual_nodes, 2}
@@ -186,7 +186,7 @@ test2(_Conf) ->
 
     kai_config:start_link([
         {hostname, "localhost"},
-        {api_port, 1},
+        {rpc_port, 1},
         {n, 3},
         {number_of_buckets, 16384}, % 16,384 = 128*64*2
         {number_of_virtual_nodes, 128}

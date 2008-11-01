@@ -23,8 +23,6 @@
 -include("kai.hrl").
 
 -define(SERVER, ?MODULE).
--define(TIMEOUT, 3000).
--define(TIMER, 1000).
 
 start_link() ->
     gen_fsm:start_link({local, ?SERVER}, ?MODULE, [], _Opts = []).
@@ -38,7 +36,7 @@ terminate(_Reason, _StateName, _StateData) ->
 ping_nodes([], AvailableNodes, DownNodes) ->
     {AvailableNodes, DownNodes};
 ping_nodes([Node|Nodes], AvailableNodes, DownNodes) ->
-    case kai_api:node_info(Node) of
+    case kai_rpc:node_info(Node) of
         {node_info, Node2, Info} ->
             ping_nodes(Nodes, [{Node2, Info}|AvailableNodes], DownNodes);
         {error, Reason} ->
@@ -47,7 +45,7 @@ ping_nodes([Node|Nodes], AvailableNodes, DownNodes) ->
     end.
 
 retrieve_node_list(Node) ->
-    case kai_api:node_list(Node) of
+    case kai_rpc:node_list(Node) of
         {node_list, RemoteNodeList} ->
             {node_list, LocalNodeList} = kai_hash:node_list(),
             NewNodes = RemoteNodeList -- LocalNodeList,
@@ -93,9 +91,9 @@ ready(timeout, State) ->
 handle_event(stop, _StateName, StateData) ->
     {stop, normal, StateData}.
 handle_sync_event(_Event, _From, _StateName, StateData) ->
-    {next_state, ready, StateData, 3000}.
+    {next_state, ready, StateData, ?TIMEOUT}.
 handle_info(_Info, _StateName, StateData) ->
-    {next_state, ready, StateData, 3000}.
+    {next_state, ready, StateData, ?TIMEOUT}.
 code_change(_OldVsn, _StateName, StateData, _Extra) ->
     {ok, ready, StateData}.
 

@@ -10,7 +10,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(kai_api_SUITE).
+-module(kai_rpc_SUITE).
 -compile(export_all).
 
 -include("kai.hrl").
@@ -22,21 +22,23 @@ test1() -> [].
 test1(_Conf) ->
     kai_config:start_link([
         {hostname, "localhost"},
-        {api_port, 11011},
-        {api_max_processes, 2},
+        {rpc_port, 11011},
+        {rpc_max_processes, 2},
         {n, 3},
         {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2}]),
+        {number_of_virtual_nodes, 2},
+        {store, ets}
+    ]),
     kai_hash:start_link(),
     kai_store:start_link(),
     kai_connection:start_link(),
-    kai_api:start_link(),
+    kai_rpc:start_link(),
 
-    timer:sleep(100), % wait for starting kai_api
+    timer:sleep(100), % wait for starting kai_rpc
 
-    {node_info, ?NODE1, ?INFO} = kai_api:node_info(?NODE1),
+    {node_info, ?NODE1, ?INFO} = kai_rpc:node_info(?NODE1),
 
-    {node_list, [?NODE1]} = kai_api:node_list(?NODE1),
+    {node_list, [?NODE1]} = kai_rpc:node_list(?NODE1),
 
     Data = #data{
         key           = "item-1",
@@ -46,8 +48,8 @@ test1(_Conf) ->
         flags         = "0",
         value         = (<<"value-1">>)
     },
-    ok = kai_api:put(?NODE1, Data),
-    ?assertEqual(Data, kai_store:get("item-1")),
+    ok = kai_rpc:put(?NODE1, Data),
+    ?assertEqual(Data, kai_store:get(#data{key="item-1", bucket=3})),
 
     ListOfData = #data{
         key           = "item-1",
@@ -55,15 +57,15 @@ test1(_Conf) ->
         last_modified = Data#data.last_modified,
         checksum      = erlang:md5(<<"value-1">>)
     },
-    {list_of_data, [ListOfData]} = kai_api:list(?NODE1, 3),
+    {list_of_data, [ListOfData]} = kai_rpc:list(?NODE1, 3),
 
-    Data = kai_api:get(?NODE1, "item-1"),
+    Data = kai_rpc:get(?NODE1, #data{key="item-1", bucket=3}),
 
-    ok = kai_api:delete(?NODE1, "item-1"),
+    ok = kai_rpc:delete(?NODE1, #data{key="item-1", bucket=3}),
 
-    undefined = kai_api:get(?NODE1, "item-1"),
+    undefined = kai_rpc:get(?NODE1, #data{key="item-1", bucket=3}),
 
-    kai_api:stop(),
+    kai_rpc:stop(),
     kai_connection:stop(),
     kai_store:stop(),
     kai_hash:stop(),

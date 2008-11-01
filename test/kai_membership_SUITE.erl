@@ -52,7 +52,7 @@ test1_api_send(ApiSocket, {list, 3 = _Bucket}) ->
     gen_tcp:send(ApiSocket, term_to_binary({list_of_data, ListOfData}));
 test1_api_send(ApiSocket, {list, _Bucket}) ->
     gen_tcp:send(ApiSocket, term_to_binary({list_of_data, []}));
-test1_api_send(ApiSocket, {get, "item-1"}) ->
+test1_api_send(ApiSocket, {get, #data{key="item-1", bucket=3}}) ->
     Data = #data{
         key           = "item-1",
         bucket        = 3,
@@ -68,10 +68,11 @@ test1(_Conf) ->
     % This is NODE3, not NODE1
     kai_config:start_link([
         {hostname, "localhost"},
-        {api_port, 11013},
+        {rpc_port, 11013},
         {n, 3},
         {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2}
+        {number_of_virtual_nodes, 2},
+        {store, ets}
     ]),
     kai_hash:start_link(),
     kai_store:start_link(),

@@ -11,94 +11,26 @@
 % the License.
 
 -module(kai_store).
--behaviour(gen_server).
 
 -export([start_link/0, stop/0]).
 -export([list/1, get/1, put/1, delete/1]).
--export([
-    init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-    code_change/3
-]).
 
 -include("kai.hrl").
 
 -define(SERVER, ?MODULE).
 
 start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], _Opts = []).
-
-init(_Args) ->
-    ets:new(data, [set, private, named_table, {keypos, 2}]),
-    {ok, []}.
-
-terminate(_Reason, _State) ->
-    ets:delete(data),
-    ok.
-
-do_list(Bucket, State) ->
-    Head = #data{
-        key           = '$1',
-        bucket        = Bucket,
-        last_modified = '$2',
-        vector_clocks = '$3', 
-        checksum      = '$4',
-        flags         = '_',
-        value         = '_'
-    },
-    Cond = [],
-    Body = [{#data{
-        key           = '$1',
-        bucket        = Bucket,
-        last_modified = '$2',
-        vector_clocks = '$3',
-        checksum      = '$4'
-    }}],
-    ListOfData = ets:select(data, [{Head, Cond, Body}]),
-    {reply, {list_of_data, ListOfData}, State}.
-
-do_get(Key, State) ->
-    case ets:lookup(data, Key) of
-        [Data] -> {reply, Data, State};
-        _      -> {reply, undefined, State}
-    end.
-
-do_put(Data, State) when is_record(Data, data) ->
-    ets:insert(data, Data),
-    {reply, ok, State}.
-
-do_delete(Key, State) ->
-    case ets:lookup(data, Key) of
-        [_Data] ->
-            ets:delete(data, Key),
-            {reply, ok, State};
-        _ ->
-            {reply, undefined, State}
-    end.
-
-handle_call(stop, _From, State) ->
-    {stop, normal, stopped, State};
-handle_call({list, Bucket}, _From, State) ->
-    do_list(Bucket, State);
-handle_call({get, Key}, _From, State) ->
-    do_get(Key, State);
-handle_call({put, Data}, _From, State) ->
-    do_put(Data, State);
-handle_call({delete, Key}, _From, State) ->
-    do_delete(Key, State).
-handle_cast(_Msg, State) ->
-    {noreply, State}.
-handle_info(_Info, State) ->
-    {noreply, State}.
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+    Store = kai_config:get(store),
+    Module = list_to_atom(atom_to_list(?MODULE) ++ "_" ++ atom_to_list(Store)),
+    apply(Module, start_link, [?SERVER]).
 
 stop() ->
     gen_server:call(?SERVER, stop).
 list(Bucket) ->
     gen_server:call(?SERVER, {list, Bucket}).
-get(Key) ->
-    gen_server:call(?SERVER, {get, Key}).
+get(Data) ->
+    gen_server:call(?SERVER, {get, Data}).
 put(Data) ->
     gen_server:call(?SERVER, {put, Data}).
-delete(Key) ->
-    gen_server:call(?SERVER, {delete, Key}).
+delete(Data) ->
+    gen_server:call(?SERVER, {delete, Data}).

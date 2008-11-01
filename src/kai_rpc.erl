@@ -10,7 +10,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(kai_api).
+-module(kai_rpc).
 -behaviour(kai_tcp_server).
 
 -export([start_link/0, stop/0]).
@@ -23,8 +23,6 @@
 
 -include("kai.hrl").
 
--define(TIMEOUT, 3000).
-
 start_link() ->
     kai_tcp_server:start_link(
         {local, ?MODULE},
@@ -32,8 +30,8 @@ start_link() ->
         [],
         #tcp_server_option{
             listen = [binary, {packet, 4}, {active, true}, {reuseaddr, true}],
-            port          = kai_config:get(api_port),
-            max_processes = kai_config:get(api_max_processes)
+            port          = kai_config:get(rpc_port),
+            max_processes = kai_config:get(rpc_max_processes)
         }
     ).
 
@@ -53,14 +51,14 @@ dispatch(_Socket, node_list, State) ->
 dispatch(_Socket, {list, Bucket}, State) ->
     reply(kai_store:list(Bucket), State);
 
-dispatch(_Socket, {get, Key}, State) ->
-    reply(kai_store:get(Key), State);
+dispatch(_Socket, {get, Data}, State) ->
+    reply(kai_store:get(Data), State);
 
 dispatch(_Socket, {put, Data}, State) when is_record(Data, data)->
     reply(kai_store:put(Data), State);
 
-dispatch(_Socket, {delete, Key}, State) ->
-    reply(kai_store:delete(Key), State);
+dispatch(_Socket, {delete, Data}, State) ->
+    reply(kai_store:delete(Data), State);
 
 dispatch(_Socket, {check_node, Node}, State) ->
     reply(kai_membership:check_node(Node), State);
@@ -145,10 +143,10 @@ list(Node, Bucket) ->
         _    -> request(Node, {list, Bucket})
     end.
 
-get(Node, Key) ->
+get(Node, Data) ->
     case is_local_node(Node) of
-        true -> kai_store:get(Key);
-        _    -> request(Node, {get, Key})
+        true -> kai_store:get(Data);
+        _    -> request(Node, {get, Data})
     end.
 
 put(Node, Data) ->
@@ -157,10 +155,10 @@ put(Node, Data) ->
         _    -> request(Node, {put, Data})
     end.
 
-delete(Node, Key) ->
+delete(Node, Data) ->
     case is_local_node(Node) of
-        true -> kai_store:delete(Key);
-        _    -> request(Node, {delete, Key})
+        true -> kai_store:delete(Data);
+        _    -> request(Node, {delete, Data})
     end.
 
 check_node(Node, Node2) ->

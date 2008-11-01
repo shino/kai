@@ -16,10 +16,10 @@
 -include("kai.hrl").
 -include("kai_test.hrl").
 
-all() -> [test1, test2].
+all() -> [test_ets, test_dets, test_perf].
 
-test1() -> [].
-test1(_Conf) ->
+test(Conf) ->
+    kai_config:start_link(Conf),
     kai_store:start_link(),
 
     Data1 = #data{
@@ -31,13 +31,14 @@ test1(_Conf) ->
         value         = (<<"value-1">>)
     },
     kai_store:put(Data1),
+
     ?assertEqual(
        Data1,
-       kai_store:get("item-1")
+       kai_store:get(#data{key="item-1", bucket=3})
       ),
     ?assertEqual(
        undefined,
-       kai_store:get("item-2")
+       kai_store:get(#data{key="item-2", bucket=1})
       ),
 
     Data2 = #data{
@@ -51,7 +52,7 @@ test1(_Conf) ->
     kai_store:put(Data2),
     ?assertEqual(
        Data2,
-       kai_store:get("item-2")
+       kai_store:get(#data{key="item-2", bucket=1})
       ),
 
     Data3 = #data{
@@ -65,7 +66,7 @@ test1(_Conf) ->
     kai_store:put(Data3),
     ?assertEqual(
        Data3,
-       kai_store:get("item-3")
+       kai_store:get(#data{key="item-3", bucket=3})
       ),
 
     {list_of_data, ListOfData1} = kai_store:list(1),
@@ -91,22 +92,48 @@ test1(_Conf) ->
     kai_store:put(Data1b),
     ?assertEqual(
        Data1b,
-       kai_store:get("item-1")
+       kai_store:get(#data{key="item-1", bucket=3})
       ),
 
-    kai_store:delete("item-1"),
+    kai_store:delete(#data{key="item-1", bucket=3}),
     ?assertEqual(
        undefined,
-       kai_store:get("item-1")
+       kai_store:get(#data{key="item-1", bucket=3})
       ),
 
     {list_of_data, ListOfData4} = kai_store:list(3),
     ?assertEqual(1, length(ListOfData4)),
     ?assert(lists:keymember("item-3", 2, ListOfData4)),
 
-    kai_store:stop().
+    kai_store:stop(),
+    kai_config:stop().
 
-test2_put(T) ->
+test_ets() -> [].
+test_ets(_Conf) ->
+    test([
+        {hostname, "localhost"},
+        {rpc_port, 11011},
+        {n, 3},
+        {number_of_buckets, 8},
+        {number_of_virtual_nodes, 2},
+        {store, ets}
+    ]).
+
+test_dets() -> [].
+test_dets(_Conf) ->
+    test([
+        {hostname, "localhost"},
+        {rpc_port, 11011},
+        {n, 3},
+        {number_of_buckets, 8},
+        {number_of_virtual_nodes, 2},
+        {store, dets},
+        {dets_dir, "."},
+        {number_of_tables, 2}
+    ]),
+    file:delete("./1"), file:delete("./2").
+
+test_perf_put(T) ->
     lists:foreach(
       fun(I) -> 
           Key = "item-" ++ integer_to_list(I),
@@ -124,27 +151,36 @@ test2_put(T) ->
       lists:seq(1, T)
      ).
 
-test2_get(T) ->
+test_perf_get(T) ->
     lists:foreach(
       fun(I) -> 
           Key = "item-" ++ integer_to_list(I),
-          kai_store:get(Key)
+          kai_store:get(#data{key=Key, bucket=0})
       end,
       lists:seq(1, T)
      ).
 
-test2() -> [].
-test2(_Conf) ->
+test_perf() -> [].
+test_perf(_Conf) ->
+    kai_config:start_link([
+        {hostname, "localhost"},
+        {rpc_port, 11011},
+        {n, 3},
+        {number_of_buckets, 8},
+        {number_of_virtual_nodes, 2},
+        {store, ets}
+    ]),
     kai_store:start_link(),
 
     T = 10000,
 
-    {Usec, _} = timer:tc(?MODULE, test2_put, [T]),
+    {Usec, _} = timer:tc(?MODULE, test_perf_put, [T]),
     ?assert(Usec < 100*T),
     io:format("average time to put data: ~p [usec]", [Usec/T]),
 
-    {Usec2, _} = timer:tc(?MODULE, test2_get, [T]),
+    {Usec2, _} = timer:tc(?MODULE, test_perf_get, [T]),
     ?assert(Usec2 < 100*T),
     io:format("average time to get data: ~p [usec]", [Usec2/T]),
 
-    kai_store:stop().
+    kai_store:stop(),
+    kai_config:stop().
