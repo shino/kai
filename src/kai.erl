@@ -14,6 +14,7 @@
 -behaviour(application).
 
 -export([start/2, stop/1]).
+-export([start/0]).
 
 config([], Acc) ->
     Acc;
@@ -37,3 +38,6 @@ start(_Type, _Args) ->
 
 stop(_State) ->
     ok.
+
+start() ->
+    application:start(kai).

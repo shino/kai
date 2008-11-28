@@ -39,15 +39,9 @@ handle_call(Socket, Data, State) ->
     dispatch(Socket, string:tokens(binary_to_list(Data), " \r\n"), State).
 
 dispatch(_Socket, ["get", Key], State) ->
-    case kai_coordinator:route({get, #data{key=Key}}) of
-        Data when is_list(Data) ->
-            Response = get_response(Data),
-            {reply, [Response|"END\r\n"], State};
-        undefined ->
-            {reply, <<"END\r\n">>, State};
-        _Other ->
-            send_error_and_close("Failed to read.", State)
-    end;
+    do_get(Key, State, false);
+dispatch(_Socket, ["gets", Key], State) ->
+    do_get(Key, State, true);
 
 dispatch(Socket, ["set", _Key, _Flags, "0", _Bytes] = Data, State) ->
     inet:setopts(Socket, [{packet, raw}]),
@@ -70,17 +64,34 @@ dispatch(_Socket, ["quit"], _State) -> quit;
 
 dispatch(_Socket, _Unknown, _State) -> {reply, <<"ERROR\r\n">>}.
 
-get_response(Data) ->
-    lists:map(fun(Elem) ->
-        Key = Elem#data.key,
-        Flags = Elem#data.flags,
-        Value = Elem#data.value,
-        [
-            io_lib:format("VALUE ~s ~s ~w", [Key, Flags, byte_size(Value)]),
-            "\r\n", Value, "\r\n"
-        ]
-    end, Data).
- 
+do_get(Key, State, WithCasUnique) ->
+    case kai_coordinator:route({get, #data{key=Key}}) of
+        Data when is_list(Data) ->
+            {ok, CasUniqueInBinary} = kai_version:cas_unique(Data),
+            Response = get_response(Data, WithCasUnique, CasUniqueInBinary),
+            {reply, [Response|"END\r\n"], State};
+        undefined ->
+            {reply, <<"END\r\n">>, State};
+        _Other ->
+            send_error_and_close("Failed to read.", State)
+    end.
+
+get_response(Data, WithCasUnique, CasUnique) ->
+    lists:map(
+      fun(Elem) ->
+              Key = Elem#data.key,
+              Flags = Elem#data.flags,
+              Value = Elem#data.value,
+              [
+               io_lib:format("VALUE ~s ~s ~w", [Key, Flags, byte_size(Value)]),
+               case WithCasUnique of
+                   true ->
+                       io_lib:format(" ~w", [cas_unique(CasUnique)]);
+                   _ -> []
+               end,
+               "\r\n", Value, "\r\n"]
+      end, Data).
+
 recv_set_data(Socket, ["set", Key, Flags, "0", Bytes], State) ->
     case gen_tcp:recv(Socket, list_to_integer(Bytes), ?MEMCACHE_TIMEOUT) of
         {ok, Value} ->
@@ -102,3 +113,6 @@ send_error_and_close(Message, State) ->
     ?warning(io_lib:format("send_error_and_close/2: ~p", [Message])),
     {close, ["SERVER_ERROR ", Message, "\r\n"], State}.
 
+cas_unique(CasUniqueInBinary) ->
+    <<HashedValue:64/integer>> = CasUniqueInBinary,
+    HashedValue.

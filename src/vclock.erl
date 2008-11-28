@@ -30,7 +30,6 @@
 
 -export([fresh/0,descends/2,merge/1,get_counter/2,get_timestamp/2,
          increment/2,all_nodes/1]).
--export([example_test/0]).
 
 %% @type vclock() = [vc_entry].
 %% @type   vc_entry() = {node(), {counter(), timestamp()}}.
@@ -44,12 +43,6 @@
 %% @spec fresh() -> vclock()
 fresh() ->
     [].
-
-%% @doc Reflect an update performed by Node.
-%%      See increment/2 for usage.
-%% @spec extend(VC_Entry :: VC_Entry, VClock :: vclock()) -> vclock()
-extend({Node,{Ctr,TS}}, VClock) ->
-    simplify([{Node,{Ctr,TS}}|VClock]).
 
 %% @doc Remove trivial ancestors.
 %% @spec simplify(vclock()) -> vclock()
@@ -66,26 +59,6 @@ simplify([{Node,{Ctr1,TS1}}|VClock], NClock) ->
                        {Ctr2,TS2}
                end,
     simplify(VClock, [{Node,{Ctr,TS}}|proplists:delete(Node, NClock)]).
-
-%% @todo Use common_test or other good test framework, and write more tests.
-%%
-%% @doc Serves as both a trivial test and some example code.
-example_test() ->
-    A = vclock:fresh(),
-    B = vclock:fresh(),
-    A1 = vclock:increment(a, A),
-    B1 = vclock:increment(b, B),
-    true = vclock:descends(A1,A),
-    true = vclock:descends(B1,B),
-    false = vclock:descends(A1,B1),
-    A2 = vclock:increment(a, A1),
-    C = vclock:merge([A2, B1]),
-    C1 = vclock:increment(c, C),
-    true = vclock:descends(C1, A2),
-    true = vclock:descends(C1, B1),
-    false = vclock:descends(B1, C1),
-    false = vclock:descends(B1, A1),
-    ok.
 
 %% @doc Return true if Va is a direct descendant of Vb, else false -- remember, a vclock is its own descendant!
 %% @spec descends(Va :: vclock(), Vb :: vclock()) -> bool()
@@ -116,6 +89,7 @@ descends(Va, Vb) ->
 %% @spec merge(VClocks :: [vclock()]) -> vclock()
 merge(VClocks) ->
     merge(VClocks, []).
+
 merge([], NClock) ->
     NClock;
 merge([AClock|VClocks],NClock) ->
@@ -147,6 +121,12 @@ increment(Node, VClock) ->
                         {C + 1, timestamp()}
                 end,
     extend({Node, {Ctr, TS}}, VClock).
+
+%% @doc Reflect an update performed by Node.
+%%      See increment/2 for usage.
+%% @spec extend(VC_Entry :: VC_Entry, VClock :: vclock()) -> vclock()
+extend({Node,{Ctr,TS}}, VClock) ->
+    simplify([{Node,{Ctr,TS}}|VClock]).
 
 %% @doc Return the list of all nodes that have ever incremented VClock.
 %% @spec all_nodes(VClock :: vclock()) -> [node()]

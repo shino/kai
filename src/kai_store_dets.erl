@@ -32,9 +32,11 @@ init(_Args) ->
           fun(I) ->
                   Name = list_to_atom(atom_to_list(?MODULE) ++ "_" ++ integer_to_list(I)),
                   File = Dir ++ "/" ++ integer_to_list(I),
-                  {ok, Table} =
-                      dets:open_file(Name, [{type, set}, {keypos, 2}, {file, File}]),
-                  {I, Table}
+                  case dets:open_file(Name, [{type, set}, {keypos, 2}, {file, File}]) of
+                      {ok, Table} -> {I, Table};
+                      {error, Reason} -> ?info(Reason),
+                                         exit(Reason)
+                  end
           end,
           lists:seq(1, NumberOfTables)
          ),
@@ -83,6 +85,16 @@ do_get(#data{key=Key, bucket=Bucket} = _Data, Tables) ->
 
 do_put(Data, Tables) when is_record(Data, data) ->
     Table = bucket_to_table(Data#data.bucket, Tables),
+    case dets:lookup(Table, Data#data.key) of
+        [StoredData] ->
+            case vclock:descends(Data#data.vector_clocks, StoredData#data.vector_clocks) of
+                true -> insert_and_reply(Data, Table, Tables);
+                _ -> {reply, {error, "stale or concurrent state found in kai_store"}, Tables}
+            end;
+        _ -> insert_and_reply(Data, Table, Tables)
+    end.
+
+insert_and_reply(Data, Table, Tables) ->
     dets:insert(Table, Data),
     dets:sync(Table),
     {reply, ok, Tables}.

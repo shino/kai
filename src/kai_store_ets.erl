@@ -60,6 +60,17 @@ do_get(#data{key=Key} = _Data, State) ->
     end.
 
 do_put(Data, State) when is_record(Data, data) ->
+    case ets:lookup(?MODULE, Data#data.key) of
+        [StoredData] ->
+            case vclock:descends(Data#data.vector_clocks, StoredData#data.vector_clocks) of
+                true -> insert_and_reply(Data, State);
+                _ -> {reply, {error, "stale or concurrent state found in kai_store"}, State}
+            end;
+        _ -> insert_and_reply(Data, State)
+    end;
+do_put(a, b) -> ok.
+
+insert_and_reply(Data, State) ->
     ets:insert(?MODULE, Data),
     {reply, ok, State}.
 

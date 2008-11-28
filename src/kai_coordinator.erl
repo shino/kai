@@ -60,7 +60,7 @@ route({_Type, Data} = Request) ->
     after ?TIMEOUT ->
             ?warning(io_lib:format("route(~p): timeout", [Data#data.key])),
             []
-    end. 
+    end.
 
 coordinate_get(Data) ->
     {bucket, Bucket} = kai_hash:find_bucket(Data#data.key),
@@ -118,9 +118,9 @@ coordinate_put(Data) ->
             PreviousData when is_record(PreviousData, data) ->
                 PreviousData;
             undefined ->
-                #data{key=Key}
+                #data{key=Key, vector_clocks=vclock:fresh()}
         end,
-    Data2 = kai_version:update(Data1),
+    {ok, Data2} = kai_version:update(Data1),
     Data3 = Data2#data{
         bucket   = Bucket,
         checksum = erlang:md5(Value),
