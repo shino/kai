@@ -60,6 +60,14 @@ dispatch(_Socket, ["delete", Key], State) ->
             send_error_and_close(State, "Failed to delete.")
     end;
 
+dispatch(_Socket, ["delete", Key, "0"], State) ->
+    dispatch(_Socket, ["delete", Key], State);
+dispatch(_Socket, ["delete", _Key, _Time], State) ->
+    {reply, <<"CLIENT_ERROR Time must be zero.\r\n">>, State};
+
+dispatch(_Socket, ["delete", _Key, _Time, "noreply"], State) ->
+    {reply, <<"CLIENT_ERROR noreply not supported.\r\n">>, State};
+
 dispatch(_Socket, ["quit"], _State) -> quit;
 
 dispatch(_Socket, _Unknown, _State) -> {reply, <<"ERROR\r\n">>}.

@@ -75,7 +75,7 @@ test1(_Conf) ->
        gen_tcp:recv(MemcacheSocket, 0)
       ),
 
-    gen_tcp:send(MemcacheSocket, "delete item-2\r\n"),
+    gen_tcp:send(MemcacheSocket, "delete item-2 0\r\n"),
 
     ?assertEqual(
        {ok, <<"NOT_FOUND\r\n">>},
