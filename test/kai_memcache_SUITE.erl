@@ -89,6 +89,13 @@ test1(_Conf) ->
        gen_tcp:recv(MemcacheSocket, 0)
       ),
 
+    gen_tcp:send(MemcacheSocket, "no_such_command\r\n"),
+
+    ?assertEqual(
+       {ok, <<"ERROR\r\n">>},
+       gen_tcp:recv(MemcacheSocket, 0)
+      ),
+
     gen_tcp:send(MemcacheSocket, "quit\r\n"),
 
     gen_tcp:close(MemcacheSocket),

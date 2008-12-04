@@ -70,7 +70,8 @@ dispatch(_Socket, ["delete", _Key, _Time, "noreply"], State) ->
 
 dispatch(_Socket, ["quit"], _State) -> quit;
 
-dispatch(_Socket, _Unknown, _State) -> {reply, <<"ERROR\r\n">>}.
+dispatch(_Socket, _Unknown, State) ->
+    {reply, <<"ERROR\r\n">>, State}.
 
 do_get(Key, State, WithCasUnique) ->
     case kai_coordinator:route({get, #data{key=Key}}) of
