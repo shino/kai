@@ -117,7 +117,8 @@ acceptor_accept(ListenSocket, State, Mod, Option) ->
             acceptor_loop(
                 proplists:get_value(active, Option#tcp_server_option.listen),
                 Socket, State, Mod, Option
-            );
+            ),
+            gen_tcp:close(Socket);
         {error, Reason} ->
             ?warning(io_lib:format("acceptor_accept(~p) ~p", [Mod, {error, Reason}])),
             timer:sleep(Option#tcp_server_option.accept_error_sleep_time)
@@ -136,7 +137,7 @@ acceptor_loop(false, Socket, State, Mod, Option) ->
             tcp_closed;
         {error, Reason} ->
             ?warning(io_lib:format("acceptor_loop(~p) ~p", [Mod, {error, Reason}])),
-            exit({error, Reason})
+            error
     end;
 
 acceptor_loop(true, _DummySocket, State, Mod, Option) ->
@@ -146,9 +147,10 @@ acceptor_loop(true, _DummySocket, State, Mod, Option) ->
         {tcp_closed, _Socket} ->
             tcp_closed;
         Error ->
-            exit({error, Error})
+            ?warning(io_lib:format("acceptor_loop(~p) ~p", [Mod, {error, Error}])),
+            error
     after Option#tcp_server_option.recv_timeout ->
-        exit({error, tcp_timeout})
+        tcp_timeout
     end.
  
 call_mod(Active, Socket, Data, State, Mod, Option) ->
@@ -159,11 +161,10 @@ call_mod(Active, Socket, Data, State, Mod, Option) ->
         {noreply, State} ->
             acceptor_loop(Active, Socket, State, Mod, Option);
         {close, State} ->
-            gen_tcp:close(Socket);
+            tcp_closed;
         {close, DataToSend, State} ->
-            gen_tcp:send(Socket, DataToSend),
-            gen_tcp:close(Socket);
-        _Error ->
-            gen_tcp:close(Socket)
+            gen_tcp:send(Socket, DataToSend);
+        Other ->
+            ?warning(io_lib:format("call_mod(~p) ~p", [Mod, {unexpected_result, Other}]))
     end.
 
