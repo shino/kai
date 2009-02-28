@@ -124,6 +124,9 @@ test(Conf) ->
     ?assertEqual(1, length(ListOfData4)),
     ?assert(lists:keymember("item-3", 2, ListOfData4)),
 
+    ?assert(is_integer(kai_store:info(bytes))),
+    ?assertEqual(2, kai_store:info(size)),
+
     kai_store:stop(),
     kai_version:stop(),
     kai_config:stop(),

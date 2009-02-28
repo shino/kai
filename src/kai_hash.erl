@@ -17,7 +17,8 @@
 -export([
     update_nodes/2, find_bucket/1, find_replica/1, find_nodes/1,
     choose_node_randomly/0, choose_bucket_randomly/0,
-    node_info/1, node_info/0, node_list/0, virtual_node_list/0, buckets/0
+    node_info/1, node_info/0, node_list/0, virtual_node_list/0, 
+    bucket_list/0, buckets/0
 ]).
 -export([
     init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -261,9 +262,19 @@ virtual_node_list(State) ->
     VirtualNodeList = ets:tab2list(virtual_node_list),
     {reply, {virtual_node_list, VirtualNodeList}, State}.
 
-buckets(State) ->
+bucket_list(State) ->
     Buckets = ets:tab2list(buckets),
-    {reply, {buckets, Buckets}, State}.
+    {reply, {bucket_list, lists:sort(Buckets)}, State}.
+
+buckets(State) ->
+    LocalNode = kai_config:get(node),
+    Buckets =
+        lists:filter(
+          fun(B) -> lists:member(LocalNode, element(2, B)) end,
+          ets:tab2list(buckets)
+         ),
+    Buckets2 = [element(1, B) || B <- Buckets],
+    {reply, {buckets, lists:sort(Buckets2)}, State}.
 
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State};
@@ -287,6 +298,8 @@ handle_call(node_list, _From, State) ->
     node_list(State);
 handle_call(virtual_node_list, _From, State) ->
     virtual_node_list(State);
+handle_call(bucket_list, _From, State) ->
+    bucket_list(State);
 handle_call(buckets, _From, State) ->
     buckets(State).
 handle_cast(_Msg, State) ->
@@ -318,5 +331,7 @@ node_list() ->
     gen_server:call(?SERVER, node_list).
 virtual_node_list() ->
     gen_server:call(?SERVER, virtual_node_list).
+bucket_list() ->
+    gen_server:call(?SERVER, bucket_list).
 buckets() ->
     gen_server:call(?SERVER, buckets).

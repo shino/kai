@@ -35,6 +35,7 @@ test1(_Conf) ->
     ]),
     kai_hash:start_link(),
     kai_store:start_link(),
+    kai_stat:start_link(),
     kai_version:start_link(),
     kai_connection:start_link(),
     kai_rpc:start_link(),
@@ -65,34 +66,79 @@ test1(_Conf) ->
        {ok, <<"value-1">>},
        gen_tcp:recv(MemcacheSocket, byte_size(<<"value-1">>))
       ),
-    gen_tcp:recv(MemcacheSocket, byte_size(<<"\r\nEND\r\n">>)),
-    inet:setopts(MemcacheSocket, [{packet, raw}]),
+    inet:setopts(MemcacheSocket, [{packet, line}]),
+    ?assertEqual(
+       {ok, <<"\r\n">>},
+       gen_tcp:recv(MemcacheSocket, 0)
+      ),
+    ?assertEqual(
+       {ok, <<"END\r\n">>},
+       gen_tcp:recv(MemcacheSocket, 0)
+      ),
 
     gen_tcp:send(MemcacheSocket, "delete item-1\r\n"),
-
     ?assertEqual(
        {ok, <<"DELETED\r\n">>},
        gen_tcp:recv(MemcacheSocket, 0)
       ),
 
     gen_tcp:send(MemcacheSocket, "delete item-2 0\r\n"),
-
     ?assertEqual(
        {ok, <<"NOT_FOUND\r\n">>},
        gen_tcp:recv(MemcacheSocket, 0)
       ),
 
     gen_tcp:send(MemcacheSocket, "get item-1\r\n"),
-
     ?assertEqual(
        {ok, <<"END\r\n">>},
        gen_tcp:recv(MemcacheSocket, 0)
       ),
 
     gen_tcp:send(MemcacheSocket, "no_such_command\r\n"),
-
     ?assertEqual(
        {ok, <<"ERROR\r\n">>},
+       gen_tcp:recv(MemcacheSocket, 0)
+      ),
+
+    gen_tcp:send(MemcacheSocket, "stats\r\n"),
+    {ok, Uptime              } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, Time                } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, Version             } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, Bytes               } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, CurrItems           } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, CmdGet              } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, CmdSet              } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, BytesRead           } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, BytesWrite          } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, LocalNode           } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, Quorum              } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, NumberOfBuckets     } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, NumberOfVirtualNodes} = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, Store               } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, Nodes               } = gen_tcp:recv(MemcacheSocket, 0),
+%    {ok, Buckets             } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, ErlangProcs         } = gen_tcp:recv(MemcacheSocket, 0),
+    {ok, ErlangVersion       } = gen_tcp:recv(MemcacheSocket, 0),
+    {match, _S1, _L1} = regexp:match(binary_to_list(Uptime),               "uptime"),
+    {match, _S2, _L2} = regexp:match(binary_to_list(Time),                 "time"),
+    {match, _S3, _L3} = regexp:match(binary_to_list(Version),              "version"),
+    {match, _S4, _L4} = regexp:match(binary_to_list(Bytes),                "bytes"),
+    {match, _S5, _L5} = regexp:match(binary_to_list(CurrItems),            "curr_items"),
+    {match, _S6, _L6} = regexp:match(binary_to_list(CmdGet),               "cmd_get"),
+    {match, _S7, _L7} = regexp:match(binary_to_list(CmdSet),               "cmd_set"),
+    {match, _S8, _L8} = regexp:match(binary_to_list(BytesRead),            "bytes_read"),
+    {match, _S9, _L9} = regexp:match(binary_to_list(BytesWrite),           "bytes_write"),
+    {match, _S0, _L0} = regexp:match(binary_to_list(LocalNode),            "kai_node"),
+    {match, _Sa, _La} = regexp:match(binary_to_list(Quorum),               "kai_quorum"),
+    {match, _Sb, _Lb} = regexp:match(binary_to_list(NumberOfBuckets),      "kai_number_of_buckets"),
+    {match, _Sc, _Lc} = regexp:match(binary_to_list(NumberOfVirtualNodes), "kai_number_of_virtual_nodes"),
+    {match, _Sd, _Ld} = regexp:match(binary_to_list(Store),                "kai_store"),
+    {match, _Se, _Le} = regexp:match(binary_to_list(Nodes),                "kai_curr_nodes"),
+%    {match, _Sf, _Lf} = regexp:match(binary_to_list(Buckets),              "kai_curr_buckets"),
+    {match, _Sg, _Lg} = regexp:match(binary_to_list(ErlangProcs),          "erlang_procs"),
+    {match, _Sh, _Lh} = regexp:match(binary_to_list(ErlangVersion),        "erlang_version"),
+    ?assertEqual(
+       {ok, <<"END\r\n">>},
        gen_tcp:recv(MemcacheSocket, 0)
       ),
 
@@ -104,6 +150,7 @@ test1(_Conf) ->
     kai_rpc:stop(),
     kai_connection:stop(),
     kai_version:stop(),
+    kai_stat:stop(),
     kai_store:stop(),
     kai_hash:stop(),
     kai_config:stop().

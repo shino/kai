@@ -3,12 +3,12 @@
   {vsn, "%VSN%"},
   {modules, [
       kai, kai_sup, kai_memcache, kai_rpc, kai_tcp_server, kai_coordinator,
-      kai_membership, kai_sync, kai_connection, kai_version, kai_store,
-      kai_hash, kai_log, kai_config
+      kai_membership, kai_sync, kai_connection, kai_version, kai_stat,
+      kai_store, kai_hash, kai_log, kai_config
   ]},
   {registered, [
-      kai_sup, kai_membership, kai_sync, kai_connection, kai_version, kai_store,
-      kai_hash, kai_log, kai_config
+      kai_sup, kai_membership, kai_sync, kai_connection, kai_version,
+      kai_stat, kai_store, kai_hash, kai_log, kai_config
   ]},
   {applications, [kernel, stdlib]},
   {mod, {kai, []}},

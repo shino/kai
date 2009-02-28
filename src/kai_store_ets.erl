@@ -83,6 +83,20 @@ do_delete(#data{key=Key} = _Data, State) ->
             {reply, undefined, State}
     end.
 
+info(Name, State) ->
+    Value =
+        case Name of
+            bytes ->
+                % this code roughly estimates the size of stored objects,
+                % since ets only store a reference to the binary
+                Ets = erlang:system_info(wordsize) + ets:info(?MODULE, memory),
+                Bin = erlang:memory(binary),
+                Ets + Bin;
+            size ->
+                ets:info(?MODULE, size)
+        end,
+    {reply, Value, State}.
+
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State};
 handle_call({list, Bucket}, _From, State) ->
@@ -92,7 +106,9 @@ handle_call({get, Data}, _From, State) ->
 handle_call({put, Data}, _From, State) ->
     do_put(Data, State);
 handle_call({delete, Data}, _From, State) ->
-    do_delete(Data, State).
+    do_delete(Data, State);
+handle_call({info, Name}, _From, State) ->
+    info(Name, State).
 handle_cast(_Msg, State) ->
     {noreply, State}.
 handle_info(_Info, State) ->

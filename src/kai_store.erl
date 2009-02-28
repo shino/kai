@@ -13,7 +13,7 @@
 -module(kai_store).
 
 -export([start_link/0, stop/0]).
--export([list/1, get/1, put/1, delete/1]).
+-export([list/1, get/1, put/1, delete/1, info/1]).
 
 -include("kai.hrl").
 
@@ -34,3 +34,5 @@ put(Data) ->
     gen_server:call(?SERVER, {put, Data}).
 delete(Data) ->
     gen_server:call(?SERVER, {delete, Data}).
+info(Name) ->
+    gen_server:call(?SERVER, {info, Name}).

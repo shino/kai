@@ -1,6 +1,6 @@
 {level, details}.
 {incl_mods, [
-    kai_config, kai_log, kai_hash, kai_store, kai_version,
+    kai_config, kai_log, kai_hash, kai_store, kai_stat, kai_version,
     kai_connection, kai_sync, kai_membership, kai_coordinator,
     kai_tcp_server, kai_rpc, kai_memcache
 ]}.

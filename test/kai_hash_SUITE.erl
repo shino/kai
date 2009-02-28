@@ -74,9 +74,21 @@ test1(_Conf) ->
        VirtualNodeList1
       ),
 
+    {bucket_list, BucketList1} = kai_hash:bucket_list(),
+    ?assertEqual(
+       [{0, [?NODE1]},
+        {1, [?NODE1]},
+        {2, [?NODE1]},
+        {3, [?NODE1]},
+        {4, [?NODE1]},
+        {5, [?NODE1]},
+        {6, [?NODE1]},
+        {7, [?NODE1]}],
+       BucketList1
+      ),
+
     {buckets, Buckets1} = kai_hash:buckets(),
-    ?assertEqual(8, length(Buckets1)),
-    ?assertEqual([?NODE1], proplists:get_value(0, Buckets1)),
+    ?assertEqual([0,1,2,3,4,5,6,7], Buckets1),
 
     {replaced_buckets, ReplacedBuckets2} =
         kai_hash:update_nodes([{?NODE2, ?INFO}, {?NODE3, ?INFO}, {?NODE4, ?INFO}],
@@ -106,16 +118,21 @@ test1(_Conf) ->
        VirtualNodeList2
       ),
 
+    {bucket_list, BucketList2} = kai_hash:bucket_list(),
+    ?assertEqual(
+       [{0, [?NODE3, ?NODE2, ?NODE1]},
+        {1, [?NODE3, ?NODE2, ?NODE1]},
+        {2, [?NODE3, ?NODE2, ?NODE1]},
+        {3, [?NODE2, ?NODE1, ?NODE4]},
+        {4, [?NODE2, ?NODE1, ?NODE4]},
+        {5, [?NODE2, ?NODE4, ?NODE1]},
+        {6, [?NODE1, ?NODE3, ?NODE2]},
+        {7, [?NODE3, ?NODE2, ?NODE1]}],
+       BucketList2
+      ),
+
     {buckets, Buckets2} = kai_hash:buckets(),
-    ?assertEqual(8, length(Buckets2)),
-    ?assertEqual([?NODE3, ?NODE2, ?NODE1], proplists:get_value(0, Buckets2)),
-    ?assertEqual([?NODE3, ?NODE2, ?NODE1], proplists:get_value(1, Buckets2)),
-    ?assertEqual([?NODE3, ?NODE2, ?NODE1], proplists:get_value(2, Buckets2)),
-    ?assertEqual([?NODE2, ?NODE1, ?NODE4], proplists:get_value(3, Buckets2)),
-    ?assertEqual([?NODE2, ?NODE1, ?NODE4], proplists:get_value(4, Buckets2)),
-    ?assertEqual([?NODE2, ?NODE4, ?NODE1], proplists:get_value(5, Buckets2)),
-    ?assertEqual([?NODE1, ?NODE3, ?NODE2], proplists:get_value(6, Buckets2)),
-    ?assertEqual([?NODE3, ?NODE2, ?NODE1], proplists:get_value(7, Buckets2)),
+    ?assertEqual([0,1,2,3,4,5,6,7], Buckets2),
 
     {bucket, Bucket1} = kai_hash:find_bucket("item-1"),
     ?assertEqual(3, Bucket1),
@@ -160,16 +177,21 @@ test1(_Conf) ->
        VirtualNodeList3
       ),
 
+    {bucket_list, BucketList3} = kai_hash:bucket_list(),
+    ?assertEqual(
+       [{0, [?NODE3, ?NODE1, ?NODE4]},
+        {1, [?NODE3, ?NODE1, ?NODE4]},
+        {2, [?NODE3, ?NODE1, ?NODE4]},
+        {3, [?NODE1, ?NODE4, ?NODE3]},
+        {4, [?NODE1, ?NODE4, ?NODE3]},
+        {5, [?NODE4, ?NODE1, ?NODE3]},
+        {6, [?NODE1, ?NODE3, ?NODE4]},
+        {7, [?NODE3, ?NODE1, ?NODE4]}],
+       BucketList3
+      ),
+
     {buckets, Buckets3} = kai_hash:buckets(),
-    ?assertEqual(8, length(Buckets3)),
-    ?assertEqual([?NODE3, ?NODE1, ?NODE4], proplists:get_value(0, Buckets3)),
-    ?assertEqual([?NODE3, ?NODE1, ?NODE4], proplists:get_value(1, Buckets3)),
-    ?assertEqual([?NODE3, ?NODE1, ?NODE4], proplists:get_value(2, Buckets3)),
-    ?assertEqual([?NODE1, ?NODE4, ?NODE3], proplists:get_value(3, Buckets3)),
-    ?assertEqual([?NODE1, ?NODE4, ?NODE3], proplists:get_value(4, Buckets3)),
-    ?assertEqual([?NODE4, ?NODE1, ?NODE3], proplists:get_value(5, Buckets3)),
-    ?assertEqual([?NODE1, ?NODE3, ?NODE4], proplists:get_value(6, Buckets3)),
-    ?assertEqual([?NODE3, ?NODE1, ?NODE4], proplists:get_value(7, Buckets3)),
+    ?assertEqual([0,1,2,3,4,5,6,7], Buckets3),
 
     {nodes, Nodes4} = kai_hash:find_nodes("item-1"),
     ?assertEqual([?NODE1, ?NODE4, ?NODE3], Nodes4),

@@ -46,6 +46,12 @@ init(Args) ->
         permanent, 1000, worker,
         [kai_store]
     },
+    Stat = {
+        kai_stat,
+        {kai_stat, start_link, []},
+        permanent, 1000, worker,
+        [kai_stat]
+    },
     Version = {
         kai_version,
         {kai_version, start_link, []},
@@ -83,6 +89,6 @@ init(Args) ->
         [kai_memcache]
     },
     {ok, {{one_for_one, 3, 10}, [
-        Config, Log, Hash, Store, Version, Connection, Sync, Membership, Rpc,
-        Memcache
+        Config, Log, Hash, Store, Stat, Version, Connection, Sync, Membership,
+        Rpc, Memcache
     ]}}.

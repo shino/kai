@@ -20,6 +20,7 @@
 ]).
 
 -include("kai.hrl").
+-record(state, {number_of_tables, tables}).
 
 start_link(Server) ->
     gen_server:start_link({local, Server}, ?MODULE, [], _Opts = []).
@@ -40,22 +41,21 @@ init(_Args) ->
           end,
           lists:seq(1, NumberOfTables)
          ),
-    {ok, Tables}.
+    {ok, #state{number_of_tables = NumberOfTables, tables = Tables}}.
 
-terminate(_Reason, Tables) ->
+terminate(_Reason, State) ->
     lists:foreach(
       fun({_I, Table}) -> dets:close(Table) end,
-      Tables
+      State#state.tables
      ),
     ok.
 
-bucket_to_table(Bucket, Tables) ->
-    NumberOfTables = kai_config:get(number_of_tables),
-    I = Bucket rem NumberOfTables + 1,
-    proplists:get_value(I, Tables).
+bucket_to_table(Bucket, State) ->
+    I = Bucket rem State#state.number_of_tables + 1,
+    proplists:get_value(I, State#state.tables).
 
-do_list(Bucket, Tables) ->
-    Table = bucket_to_table(Bucket, Tables),
+do_list(Bucket, State) ->
+    Table = bucket_to_table(Bucket, State),
     Head = #data{
         key           = '$1',
         bucket        = Bucket,
@@ -74,41 +74,55 @@ do_list(Bucket, Tables) ->
         checksum      = '$4'
     }}],
     ListOfData = dets:select(Table, [{Head, Cond, Body}]),
-    {reply, {list_of_data, ListOfData}, Tables}.
+    {reply, {list_of_data, ListOfData}, State}.
 
-do_get(#data{key=Key, bucket=Bucket} = _Data, Tables) ->
-    Table = bucket_to_table(Bucket, Tables),
+do_get(#data{key=Key, bucket=Bucket} = _Data, State) ->
+    Table = bucket_to_table(Bucket, State),
     case dets:lookup(Table, Key) of
-        [Data] -> {reply, Data, Tables};
-        _      -> {reply, undefined, Tables}
+        [Data] -> {reply, Data, State};
+        _      -> {reply, undefined, State}
     end.
 
-do_put(Data, Tables) when is_record(Data, data) ->
-    Table = bucket_to_table(Data#data.bucket, Tables),
+do_put(Data, State) when is_record(Data, data) ->
+    Table = bucket_to_table(Data#data.bucket, State),
     case dets:lookup(Table, Data#data.key) of
         [StoredData] ->
             case vclock:descends(Data#data.vector_clocks, StoredData#data.vector_clocks) of
-                true -> insert_and_reply(Data, Table, Tables);
-                _ -> {reply, {error, "stale or concurrent state found in kai_store"}, Tables}
+                true -> insert_and_reply(Data, Table, State);
+                _ -> {reply, {error, "stale or concurrent state found in kai_store"}, State}
             end;
-        _ -> insert_and_reply(Data, Table, Tables)
+        _ -> insert_and_reply(Data, Table, State)
     end.
 
-insert_and_reply(Data, Table, Tables) ->
+insert_and_reply(Data, Table, State) ->
     dets:insert(Table, Data),
     dets:sync(Table),
-    {reply, ok, Tables}.
+    {reply, ok, State}.
 
-do_delete(#data{key=Key, bucket=Bucket} = _Data, Tables) ->
-    Table = bucket_to_table(Bucket, Tables),
+do_delete(#data{key=Key, bucket=Bucket} = _Data, State) ->
+    Table = bucket_to_table(Bucket, State),
     case dets:lookup(Table, Key) of
         [_Data2] ->
             dets:delete(Table, Key),
             dets:sync(Table),
-            {reply, ok, Tables};
+            {reply, ok, State};
         _ ->
-            {reply, undefined, Tables}
+            {reply, undefined, State}
     end.
+
+info(Name, State) ->
+    Values =
+        lists:map(
+          fun(I) ->
+                  T = proplists:get_value(I, State#state.tables),
+                  case Name of
+                      bytes -> dets:info(T, file_size);
+                      size  -> dets:info(T, size)
+                  end
+          end,
+          lists:seq(1, State#state.number_of_tables)
+         ),
+    {reply, lists:sum(Values), State}.
 
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State};
@@ -119,7 +133,9 @@ handle_call({get, Data}, _From, State) ->
 handle_call({put, Data}, _From, State) ->
     do_put(Data, State);
 handle_call({delete, Data}, _From, State) ->
-    do_delete(Data, State).
+    do_delete(Data, State);
+handle_call({info, Name}, _From, State) ->
+    info(Name, State).
 handle_cast(_Msg, State) ->
     {noreply, State}.
 handle_info(_Info, State) ->

@@ -68,6 +68,16 @@ dispatch(_Socket, ["delete", _Key, _Time], State) ->
 dispatch(_Socket, ["delete", _Key, _Time, "noreply"], State) ->
     {reply, <<"CLIENT_ERROR noreply not supported.\r\n">>, State};
 
+dispatch(_Socket, ["stats"], State) ->
+    Response =
+        lists:map(
+          fun({Name, Value}) ->
+                  ["STAT " ++ atom_to_list(Name) ++ " " ++ Value ++ "\r\n"]
+          end,
+          kai_stat:all()
+         ),
+    {reply, [Response|"END\r\n"], State};
+
 dispatch(_Socket, ["quit"], _State) -> quit;
 
 dispatch(_Socket, _Unknown, State) ->
@@ -78,6 +88,8 @@ do_get(Key, State, WithCasUnique) ->
         Data when is_list(Data) ->
             {ok, CasUniqueInBinary} = kai_version:cas_unique(Data),
             Response = get_response(Data, WithCasUnique, CasUniqueInBinary),
+            kai_stat:incr_cmd_get(),
+            kai_stat:add_bytes_read(Data),
             {reply, [Response|"END\r\n"], State};
         undefined ->
             {reply, <<"END\r\n">>, State};
@@ -110,6 +122,8 @@ recv_set_data(Socket, ["set", Key, Flags, "0", Bytes], State) ->
             ) of
                 ok ->
                     gen_tcp:send(Socket, <<"STORED\r\n">>),
+                    kai_stat:incr_cmd_set(),
+                    kai_stat:add_bytes_write(#data{value=Value}),
                     {noreply, State};
                 _Other ->
                     send_error_and_close("Failed to write.", State)
