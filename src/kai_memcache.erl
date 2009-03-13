@@ -78,6 +78,14 @@ dispatch(_Socket, ["stats"], State) ->
          ),
     {reply, [Response|"END\r\n"], State};
 
+dispatch(_Socket, ["version"], State) ->
+    Version =
+        case application:get_key(kai, vsn) of
+            {ok, V} -> V;
+            _       -> "0"
+        end,
+    {reply, "VERSION " ++ Version ++ "\r\n", State};
+
 dispatch(_Socket, ["quit"], _State) -> quit;
 
 dispatch(_Socket, _Unknown, State) ->
