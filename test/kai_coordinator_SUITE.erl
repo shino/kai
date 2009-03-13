@@ -17,7 +17,8 @@
 -include("kai_test.hrl").
 -include("ct.hrl").
 
-all() -> [test1, get_concurrent_data, put_concurrent_data].
+all() -> [test1, get_concurrent_data, put_concurrent_data,
+         put_and_overwrite_stale_data, put_and_fail_overwrite_stale_data].
 
 init_per_suite(Config) ->
     net_kernel:start([hoge, shortnames]),
@@ -134,6 +135,46 @@ put_concurrent_data(Config) ->
     ok = rpc:call(Node1, kai_store, put, [Data#data{vector_clocks=IntentionalConcurrentVCAtNode1}]),
     ok = rpc:call(Node2, kai_store, put, [Data#data{vector_clocks=IntentionalConcurrentVCAtNode2}]),
     {error, Reason} = rpc:call(Node1,
+                               kai_coordinator, route,
+                               [{put, #data{key=Key,
+                                            flags = "0",
+                                            value = (<<"value-1">>)}
+                                }]),
+    ?assertEqual(ebusy, Reason),
+    p("put error reason:", Reason),
+    ok.
+
+put_and_overwrite_stale_data() -> [].
+put_and_overwrite_stale_data(Config) ->
+    Key = "key3",
+    Node1 = ?config(node1, Config),
+    _Node2 = ?config(node2, Config),
+    ok = rpc:call(Node1, kai_coordinator, route, [{put, #data{key=Key, value="value1"}}]),
+    [Data] = rpc:call(Node1, kai_coordinator, route, [{get, #data{key=Key}}]),
+    IntentionalAhreadVCAtNode1 = vclock:increment(rpc:call(Node1, kai_config, get, [node]),
+                                               Data#data.vector_clocks),
+    ok = rpc:call(Node1, kai_store, put, [Data#data{vector_clocks=IntentionalAhreadVCAtNode1}]),
+    ok = rpc:call(Node1,
+                               kai_coordinator, route,
+                               [{put, #data{key=Key,
+                                            flags = "0",
+                                            value = (<<"value-1">>)}
+                                }]),
+    ok.
+
+put_and_fail_overwrite_stale_data() -> [].
+put_and_fail_overwrite_stale_data(Config) ->
+    Key = "key3",
+    Node1 = ?config(node1, Config),
+    Node2 = ?config(node2, Config),
+    ok = rpc:call(Node1, kai_coordinator, route, [{put, #data{key=Key, value="value1"}}]),
+    [Data] = rpc:call(Node1, kai_coordinator, route, [{get, #data{key=Key}}]),
+    IntentionalAhreadVCAtNode1 = vclock:increment(rpc:call(Node1, kai_config, get, [node]),
+                                               Data#data.vector_clocks),
+    ok = rpc:call(Node1, kai_store, put, [Data#data{vector_clocks=IntentionalAhreadVCAtNode1}]),
+    %% FIXME: this rpc:call should succeceed. Correct pattern matching is as below:
+    %% ok = rpc:call(Node2,
+    {error, Reason} = rpc:call(Node2,
                                kai_coordinator, route,
                                [{put, #data{key=Key,
                                             flags = "0",
