@@ -142,9 +142,9 @@ test1(_Conf) ->
        gen_tcp:recv(MemcacheSocket, 0)
       ),
 
-    gen_tcp:send(MemcacheSocket, "stats\r\n"),
-    {ok, Version} = gen_tcp:recv(MemcacheSocket, 0),
-    {match, _Si, _Li} = regexp:match(binary_to_list(Version), "VERSION "),
+    gen_tcp:send(MemcacheSocket, "version\r\n"),
+    {ok, Version2} = gen_tcp:recv(MemcacheSocket, 0),
+    {match, _Si, _Li} = regexp:match(binary_to_list(Version2), "VERSION "),
 
     gen_tcp:send(MemcacheSocket, "quit\r\n"),
 
