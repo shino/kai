@@ -16,7 +16,7 @@
 -include("kai.hrl").
 -include("kai_test.hrl").
 
-all() -> [test1, test2].
+all() -> [test_hash]. % test_hash_efficiency
 
 % Hash ring of test1:
 %
@@ -48,8 +48,8 @@ all() -> [test1, test2].
 % 3,758,096,384  bucket-7   [3,2,1] -> [3,1,4]
 % 4,264,647,116   NODE3(1)
 
-test1() -> [].
-test1(_Conf) ->
+test_hash() -> [].
+test_hash(_Conf) ->
     kai_config:start_link([
         {hostname, "localhost"},
         {rpc_port, 11011},
@@ -202,8 +202,8 @@ test1(_Conf) ->
     kai_hash:stop(),
     kai_config:stop().
 
-test2() -> [].
-test2(_Conf) ->
+test_hash_efficiency() -> [].
+test_hash_efficiency(_Conf) ->
     io:format("simulate network of 64 nodes"),
 
     kai_config:start_link([
