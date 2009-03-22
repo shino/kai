@@ -40,15 +40,27 @@ accept(ListenSocket, State, MonitorName, Mod, Option) ->
         ListenSocket, Option#tcp_server_option.accept_timeout
     ) of 
         {ok, Socket} ->
-            kai_tcp_server_monitor:increment(MonitorName, self()),
-            recv(
-                proplists:get_value(active, Option#tcp_server_option.listen),
-                Socket, State, Mod, Option
-            ),
-            kai_tcp_server_monitor:decrement(MonitorName, self()),
-            gen_tcp:close(Socket);
+            try
+                kai_tcp_server_monitor:increment(MonitorName, self()),
+                recv(
+                    proplists:get_value(
+                        active, Option#tcp_server_option.listen
+                    ),
+                    Socket, State, Mod, Option
+                )
+            catch
+                Type:Reason ->
+                    ?warning(io_lib:format(
+                        "accept(~p) ~p", [Mod, {Type, Reason}]
+                    ))
+            after
+                kai_tcp_server_monitor:decrement(MonitorName, self()),
+                gen_tcp:close(Socket)
+            end;
         {error, Reason} ->
-            ?warning(io_lib:format("acceptor_accept(~p) ~p", [Mod, {error, Reason}])),
+            ?warning(io_lib:format(
+                "accept(~p) ~p", [Mod, {error, Reason}]
+            )),
             timer:sleep(Option#tcp_server_option.accept_error_sleep_time)
     end,
     accept(ListenSocket, State, MonitorName, Mod, Option).
@@ -64,7 +76,7 @@ recv(false, Socket, State, Mod, Option) ->
         {error, closed} ->
             tcp_closed;
         {error, Reason} ->
-            ?warning(io_lib:format("acceptor_loop(~p) ~p", [Mod, {error, Reason}])),
+            ?warning(io_lib:format("recv(~p) ~p", [Mod, {error, Reason}])),
             error
     end;
 
@@ -75,7 +87,7 @@ recv(true, _DummySocket, State, Mod, Option) ->
         {tcp_closed, _Socket} ->
             tcp_closed;
         Error ->
-            ?warning(io_lib:format("acceptor_loop(~p) ~p", [Mod, {error, Error}])),
+            ?warning(io_lib:format("recv(~p) ~p", [Mod, {error, Error}])),
             error
     after Option#tcp_server_option.recv_timeout ->
         tcp_timeout
@@ -93,6 +105,8 @@ call_mod(Active, Socket, Data, State, Mod, Option) ->
         {close, DataToSend, State} ->
             gen_tcp:send(Socket, DataToSend);
         Other ->
-            ?warning(io_lib:format("call_mod(~p) ~p", [Mod, {unexpected_result, Other}]))
+            ?warning(io_lib:format(
+                "call_mod(~p) ~p", [Mod, {unexpected_result, Other}]
+            ))
     end.
 
