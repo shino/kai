@@ -23,6 +23,8 @@ test_all(_Conf) ->
     kai_config:start_link([
         {hostname, "localhost"},
         {rpc_port, 11011},
+        {memcache_port, 11211},
+        {memcache_max_processes, 1},
         {n, 3}, {r, 2}, {w, 2},
         {number_of_buckets, 8},
         {number_of_virtual_nodes, 2},
@@ -31,6 +33,7 @@ test_all(_Conf) ->
     kai_hash:start_link(),
     kai_store:start_link(),
     kai_stat:start_link(),
+    kai_memcache:start_link(),
 
     kai_stat:incr_cmd_get(),
     kai_stat:incr_cmd_set(),
@@ -44,6 +47,7 @@ test_all(_Conf) ->
      {version,                     Version             },
      {bytes,                       Bytes               },
      {curr_items,                  CurrItems           },
+     {curr_connections,            CurrConnections     },
      {cmd_get,                     CmdGet              },
      {cmd_set,                     CmdSet              },
      {bytes_read,                  BytesRead           },
@@ -62,6 +66,7 @@ test_all(_Conf) ->
     {match, _S3, _L3} = regexp:match(Version,       "[.0-9]+"),
     {match, _S4, _L4} = regexp:match(Bytes,         "[0-9]+"),
     ?assertEqual("0",               CurrItems           ),
+    ?assertEqual("0",               CurrConnections     ),
     ?assertEqual("1",               CmdGet              ),
     ?assertEqual("1",               CmdSet              ),
     ?assertEqual("14",              BytesRead           ),
@@ -76,6 +81,7 @@ test_all(_Conf) ->
     {match, _S5, _L5} = regexp:match(ErlangProcs,   "[0-9]+"),
     {match, _S6, _L6} = regexp:match(ErlangVersion, "[.0-9]+"),
 
+    kai_memcache:stop(),
     kai_stat:stop(),
     kai_store:stop(),
     kai_hash:stop(),

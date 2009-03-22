@@ -92,6 +92,9 @@ stat(Name, State) ->
         curr_items ->
             Size = kai_store:info(size),
             {curr_items, integer_to_list(Size)};
+        curr_connections ->
+            Connections = kai_tcp_server:info(kai_memcache, curr_connections),
+            {curr_connections, integer_to_list(Connections)};
         cmd_get ->
             {cmd_get, integer_to_list(State#state.cmd_get)};
         cmd_set ->
@@ -131,7 +134,8 @@ all(State) ->
     Stats =
         lists:map(
           fun(Name) -> stat(Name, State) end,
-          [uptime, time, version, bytes, curr_items, cmd_get, cmd_set,
+          [uptime, time, version, bytes,
+           curr_items, curr_connections, cmd_get, cmd_set,
            bytes_read, bytes_write,
            kai_node, kai_quorum, kai_number_of_buckets,
            kai_number_of_virtual_nodes, kai_store, kai_curr_nodes,
