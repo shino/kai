@@ -15,6 +15,7 @@
 
 -export([start_link/4, stop/1]).
 -export([init/1]).
+-export([build_monitor_name/1]).
 
 -include("kai.hrl").
 

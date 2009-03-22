@@ -18,43 +18,27 @@
 -include("kai.hrl").
 -include("kai_test.hrl").
 
-sequences() -> [{sequences1, [testcase1, testcase2, testcase3]}].
+sequences() ->
+    [{sequences1, [testcase1, testcase2, testcase3, testcase4]}].
 
-all() -> [{sequence, sequences1}].
+all() ->
+    [{sequence, sequences1}].
 
-init_per_testcase(testcase1, Config) ->
-    start_server(),
-    Config;
-
-init_per_testcase(testcase2, Config) ->
-    start_server(),
-    Config;
-
-init_per_testcase(testcase3, Config) ->
-    start_server(),
+init_per_testcase(testcase4, Config) ->
+    start_server(10),
     Config;
 
 init_per_testcase(_TestCase, Config) ->
+    start_server(1),
     Config.
 
-start_server() ->
+start_server(MaxProcesses) ->
     kai_tcp_server:start_link(
-        ?MODULE, [], #tcp_server_option{max_processes=1}
+        ?MODULE, [], #tcp_server_option{max_processes=MaxProcesses}
     ).
 
-end_per_testcase(testcase1, _Config) ->
-    kai_tcp_server:stop(),
-    ok;
-
-end_per_testcase(testcase2, _Config) ->
-    kai_tcp_server:stop(),
-    ok;
-
-end_per_testcase(testcase3, _Config) ->
-    kai_tcp_server:stop(),
-    ok;
-
 end_per_testcase(_TestCase, _Config) ->
+    kai_tcp_server:stop(),
     ok.
 
 testcase1() -> [].
@@ -83,7 +67,6 @@ testcase2(_Conf) ->
     gen_tcp:send(Socket, <<"error\r\n">>),
     {error, closed} = gen_tcp:recv(Socket, 0),
     gen_tcp:close(Socket),
-
     normal_test(), % check the echo server rebooted.
     ok.
 
@@ -93,6 +76,21 @@ testcase3(_Conf) ->
         {ok, Socket} = connect_to_echo_server(),
         gen_tcp:close(Socket)
     end, lists:seq(1, 10000)),
+    ok.
+
+testcase4() -> [].
+testcase4(_Conf) ->
+    Sockets = lists:map(fun (_N) ->
+        {ok, Socket} = connect_to_echo_server(),
+        Socket
+    end, lists:seq(1, 5)),
+    case kai_tcp_server:info(curr_connections) of
+        5 -> ok;
+        Error ->
+            ct:comment(io:format("bad_info:~p", [Error])),
+            ct:fail(bad_info)
+    end,
+    lists:foreach(fun (Socket) -> gen_tcp:close(Socket) end, Sockets),
     ok.
 
 connect_to_echo_server() ->

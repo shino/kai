@@ -15,6 +15,7 @@
 -export([behaviour_info/1]).
 -export([start_link/1, start_link/2, start_link/3, start_link/4]).
 -export([stop/0, stop/1]).
+-export([info/1, info/2]).
 
 -include("kai.hrl").
 
@@ -33,4 +34,10 @@ start_link(Name, Mod, Args, Option) ->
 stop() -> stop(?MODULE).
 stop(Name) ->
     kai_tcp_server_sup:stop(Name).
+
+info(Key) -> info(?MODULE, Key).
+info(Name, Key) ->
+    kai_tcp_server_monitor:info(
+        kai_tcp_server_sup:build_monitor_name(Name), Key
+    ).
 

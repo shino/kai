@@ -17,7 +17,7 @@
 -export([
     register/2,
     increment/2, decrement/2,
-    state/1
+    info/2
 ]).
 -export([
     init/1,
@@ -43,8 +43,8 @@ increment(ServerRef, Pid) ->
 decrement(ServerRef, Pid) ->
     gen_server:cast(ServerRef, {decrement, Pid}).
 
-state(ServerRef) ->
-    gen_server:call(ServerRef, state).
+info(ServerRef, Key) ->
+    gen_server:call(ServerRef, {info, Key}).
 
 % Callbacks
 init(_Args) ->
@@ -59,8 +59,8 @@ handle_call({register, Pid}, _From, {MonitorRefs, Pids}) ->
         Pids
     }};
       
-handle_call(state, _From, State) ->
-    {reply, State, State};
+handle_call({info, Key}, _From, State) ->
+    {reply, state_to_info(State, Key), State};
 
 handle_call(_Message, _From, State) ->
     {reply, ok, State}.
@@ -89,4 +89,11 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+% Internal Functions
+state_to_info({_MonitorRefs, Pids}, curr_connections) ->
+    length(Pids); 
+
+state_to_info(_State, _Key) ->
+    undefined.
 

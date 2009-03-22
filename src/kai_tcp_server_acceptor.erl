@@ -35,6 +35,7 @@ init(Parent, ListenSocket, State, MonitorName, Mod, Option) ->
     kai_tcp_server_monitor:register(MonitorName, self()),
     accept(ListenSocket, State, MonitorName, Mod, Option).
 
+% Internal Functions
 accept(ListenSocket, State, MonitorName, Mod, Option) ->
     case gen_tcp:accept(
         ListenSocket, Option#tcp_server_option.accept_timeout
