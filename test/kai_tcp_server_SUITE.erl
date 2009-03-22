@@ -84,6 +84,7 @@ testcase4(_Conf) ->
         {ok, Socket} = connect_to_echo_server(),
         Socket
     end, lists:seq(1, 5)),
+    timer:sleep(100), % wait for increment.
     case kai_tcp_server:info(curr_connections) of
         5 -> ok;
         Error ->
