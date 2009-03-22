@@ -105,7 +105,7 @@ init(_Args) -> {ok, {}}.
 handle_call(_Socket, <<"bye\r\n">>, State) ->
     {close, <<"cya\r\n">>, State};
 handle_call(_Socket, <<"error\r\n">>, State) ->
-    BadArith = 1/0,
+    (fun(X) -> 1 / X end)(0), % to throw a bad arithmetic exception
     {close, <<"error\r\n">>, State};
 handle_call(_Socket, Data, State) ->
     {reply, Data, State}.
