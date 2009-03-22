@@ -15,7 +15,7 @@
 
 -export([start_link/1, stop/1]).
 -export([
-    regist/2,
+    register/2,
     increment/2, decrement/2,
     state/1
 ]).
@@ -34,8 +34,8 @@ start_link(Name) ->
 stop(ServerRef) ->
     gen_server:call(ServerRef, stop).
 
-regist(ServerRef, Pid) ->
-    gen_server:call(ServerRef, {regist, Pid}).
+register(ServerRef, Pid) ->
+    gen_server:call(ServerRef, {register, Pid}).
 
 increment(ServerRef, Pid) ->
     gen_server:cast(ServerRef, {increment, Pid}).
@@ -53,7 +53,7 @@ init(_Args) ->
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State};
 
-handle_call({regist, Pid}, _From, {MonitorRefs, Pids}) ->
+handle_call({register, Pid}, _From, {MonitorRefs, Pids}) ->
     {reply, ok, {
         [erlang:monitor(process, Pid) | MonitorRefs],
         Pids

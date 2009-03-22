@@ -32,7 +32,7 @@ start_link({Dest, Name}, ListenSocket, State, MonitorName, Mod, Option) ->
 % Callbacks
 init(Parent, ListenSocket, State, MonitorName, Mod, Option) ->
     proc_lib:init_ack(Parent, {ok, self()}),
-    kai_tcp_server_monitor:regist(MonitorName, self()),
+    kai_tcp_server_monitor:register(MonitorName, self()),
     accept(ListenSocket, State, MonitorName, Mod, Option).
 
 accept(ListenSocket, State, MonitorName, Mod, Option) ->
