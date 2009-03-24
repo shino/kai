@@ -55,6 +55,7 @@ test1(_Conf) ->
     ]),
     kai_hash:start_link(),
     kai_store:start_link(),
+    kai_stat:start_link(),
     kai_version:start_link(),
     kai_connection:start_link(),
     kai_rpc:start_link(),
@@ -97,6 +98,7 @@ test1(_Conf) ->
     kai_rpc:stop(),
     kai_connection:stop(),
     kai_version:stop(),
+    kai_stat:stop(),
     kai_store:stop(),
     kai_hash:stop(),
     kai_config:stop().
@@ -107,6 +109,7 @@ get_concurrent_data(Config) ->
     Key = "key1",
     Node1 = ?config(node1, Config),
     Node2 = ?config(node2, Config),
+
     ok = rpc:call(Node1, kai_coordinator, route, [{put, #data{key=Key, value="value1"}}]),
     [Data] = rpc:call(Node1, kai_coordinator, route, [{get, #data{key=Key}}]),
     IntentionalConcurrentVCAtNode1 = vclock:increment(rpc:call(Node1, kai_config, get, [node]),
@@ -115,9 +118,14 @@ get_concurrent_data(Config) ->
                                                Data#data.vector_clocks),
     ok = rpc:call(Node1, kai_store, put, [Data#data{vector_clocks=IntentionalConcurrentVCAtNode1}]),
     ok = rpc:call(Node2, kai_store, put, [Data#data{vector_clocks=IntentionalConcurrentVCAtNode2}]),
+
     GetResult = rpc:call(Node1, kai_coordinator, route, [{get, #data{key=Key}}]),
     p("get result:", GetResult),
     ?assertEqual(2, length(GetResult)),
+    StatOfUnreconciledGet =
+        proplists:get_value(kai_unreconciled_get,
+                            rpc:call(Node1, kai_stat, all, [])),
+    ?assertEqual("1(1) 0(0)", lists:flatten(StatOfUnreconciledGet)),
 
     ok.
 

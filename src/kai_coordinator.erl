@@ -74,8 +74,19 @@ coordinate_get(Data) ->
     [N, R] = kai_config:get([n, r]),
     case gather_in_get(Ref, N, R, []) of
         ListOfData when is_list(ListOfData) ->
-            % TODO: write back recent if multiple versions are found and they can be resolved
-            kai_version:order(ListOfData);
+            %% TODO: write back recent if multiple versions are found and they can be resolved
+            InternalNum = sets:size(
+                            sets:from_list(
+                              lists:map(fun(E) -> E#data.vector_clocks end,
+                                       ListOfData))),
+            ReconciledList = kai_version:order(ListOfData),
+            if
+                InternalNum > 1 ->
+                    kai_stat:incr_unreconciled_get(
+                      {InternalNum, length(ReconciledList) =:= 1});
+                true -> ok
+            end,
+            ReconciledList;
         _NoData ->
             undefined
     end.
