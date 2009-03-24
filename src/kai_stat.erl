@@ -15,7 +15,7 @@
 
 -export([start_link/0, stop/0]).
 -export([all/0, incr_cmd_get/0, incr_cmd_set/0, add_bytes_read/1,
-         add_bytes_write/1]).
+         add_bytes_write/1, incr_unreconciled_get/1]).
 -export([
          init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
          code_change/3
@@ -23,8 +23,9 @@
 
 -include("kai.hrl").
 -record(state, {
-    boot_time, cmd_get, cmd_set, bytes_read, bytes_write,
-    node, quorum, number_of_buckets, number_of_virtual_nodes, store
+          boot_time, cmd_get, cmd_set, bytes_read, bytes_write,
+          unreconciled_get, node, quorum,
+          number_of_buckets, number_of_virtual_nodes, store
 }).
 
 -define(SERVER, ?MODULE).
@@ -46,6 +47,8 @@ init(_Args) ->
        cmd_set                 = 0,
        bytes_read              = 0,
        bytes_write             = 0,
+       unreconciled_get        = array:new([{size,2}, {fixed, false},
+                                            {default, [0,0]}]),
        node                    = LocalNode,
        quorum                  = Quorum,
        number_of_buckets       = NumberOfBuckets,
@@ -69,8 +72,15 @@ node_to_list({{A1,A2,A3,A4}, Port}) ->
     Addr = join(".", [integer_to_list(X) || X <- [A1,A2,A3,A4]]),
     Addr ++ ":" ++ integer_to_list(Port).
 
+format_unreconciled_get(UnreconciledGet) ->
+    join(" ",
+         array:foldr(
+           fun(_Index, [UnReconciled, InternalNum], Acc) ->
+                   [io_lib:format("~B(~B)", [UnReconciled, InternalNum]) | Acc]
+           end, [], UnreconciledGet)).
+
 stat(Name, State) ->
-    case Name of 
+    case Name of
         uptime ->
             {Msec, Sec, _Usec} = now(),
             Uptime = 1000000 * Msec + Sec - State#state.boot_time,
@@ -120,6 +130,9 @@ stat(Name, State) ->
             {node_list, Nodes} = kai_hash:node_list(),
             NodesInList = lists:sort([node_to_list(N) || N <- Nodes]),
             {kai_curr_nodes, join(" ", NodesInList)};
+        kai_unreconciled_get ->
+            {kai_unreconciled_get,
+             format_unreconciled_get(State#state.unreconciled_get)};
 %        kai_curr_buckets ->
 %            {buckets, Buckets} = kai_hash:buckets(),
 %            {kai_curr_buckets, join(" ", [integer_to_list(B) || B <- Buckets])};
@@ -139,17 +152,31 @@ all(State) ->
            bytes_read, bytes_write,
            kai_node, kai_quorum, kai_number_of_buckets,
            kai_number_of_virtual_nodes, kai_store, kai_curr_nodes,
+           kai_unreconciled_get,
            %kai_curr_buckets,
            erlang_procs, erlang_version]
          ),
     {reply, Stats, State}.
-    
+
 incr_cmd_get(State) ->
     State2 = State#state{cmd_get = State#state.cmd_get + 1},
     {noreply, State2}.
 
 incr_cmd_set(State) ->
     State2 = State#state{cmd_set = State#state.cmd_set + 1},
+    {noreply, State2}.
+
+incr_unreconciled_get(InternalNum, Reconciled, State) ->
+    Old = State#state.unreconciled_get,
+    Index = InternalNum -2,  % index is 0: two versions, 1: three, etc.
+    [Unreconciled, Internal] = array:get(Index, Old),
+    New = array:set(InternalNum -2,
+                    case Reconciled of
+                        true -> [Unreconciled, Internal + 1];
+                        _ -> [Unreconciled + 1, Internal + 1]
+                    end,
+                    Old),
+    State2 = State#state{unreconciled_get = New},
     {noreply, State2}.
 
 add_bytes_read(Data, State) ->
@@ -173,7 +200,9 @@ handle_cast(incr_cmd_set, State) ->
 handle_cast({add_bytes_read, Data}, State) ->
     add_bytes_read(Data, State);
 handle_cast({add_bytes_write, Data}, State) ->
-    add_bytes_write(Data, State).
+    add_bytes_write(Data, State);
+handle_cast({incr_unreconciled_get, {InternalNum, Reconciled}}, State) ->
+    incr_unreconciled_get(InternalNum, Reconciled, State).
 handle_info(_Info, State) ->
     {noreply, State}.
 code_change(_OldVsn, State, _Extra) ->
@@ -191,3 +220,5 @@ add_bytes_read(Data) ->
     gen_server:cast(?SERVER, {add_bytes_read, Data}).
 add_bytes_write(Data) ->
     gen_server:cast(?SERVER, {add_bytes_write, Data}).
+incr_unreconciled_get(Data) ->
+    gen_server:cast(?SERVER, {incr_unreconciled_get, Data}).

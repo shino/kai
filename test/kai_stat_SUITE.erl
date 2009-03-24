@@ -41,6 +41,10 @@ test_all(_Conf) ->
     Data = #data{value = (<<"value-1">>)},
     kai_stat:add_bytes_read([Data, Data]),
     kai_stat:add_bytes_write(Data),
+    lists:map(fun(Arg) ->
+                      kai_stat:incr_unreconciled_get(Arg)
+              end,
+              [{2, true},{2, true},{2, false},{3,true},{5,false}]),
 
     [{uptime,                      Uptime              },
      {time,                        Time                },
@@ -58,6 +62,7 @@ test_all(_Conf) ->
      {kai_number_of_virtual_nodes, NumberOfVirtualNodes},
      {kai_store,                   Store               },
      {kai_curr_nodes,              Nodes               },
+     {kai_unreconciled_get,        UnreconciledGet     },
 %     {kai_curr_buckets,            Buckets             },
      {erlang_procs,                ErlangProcs         },
      {erlang_version,              ErlangVersion       }] = kai_stat:all(),
@@ -77,6 +82,7 @@ test_all(_Conf) ->
     ?assertEqual("2",               NumberOfVirtualNodes),
     ?assertEqual("ets",             Store               ),
     ?assertEqual("127.0.0.1:11011", Nodes               ),
+    ?assertEqual("1(3) 0(1) 0(0) 1(1)", lists:flatten(UnreconciledGet)),
 %    ?assertEqual("0 1 2 3 4 5 6 7", Buckets             ),
     {match, _S5, _L5} = regexp:match(ErlangProcs,   "[0-9]+"),
     {match, _S6, _L6} = regexp:match(ErlangVersion, "[.0-9]+"),
