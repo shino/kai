@@ -47,7 +47,7 @@ init(_Args) ->
        cmd_set                 = 0,
        bytes_read              = 0,
        bytes_write             = 0,
-       unreconciled_get        = array:new([{size,2}, {fixed, false},
+       unreconciled_get        = array:new([{size, N-1}, {fixed, false},
                                             {default, [0,0]}]),
        node                    = LocalNode,
        quorum                  = Quorum,

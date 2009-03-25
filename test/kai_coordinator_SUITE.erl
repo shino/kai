@@ -125,7 +125,8 @@ get_concurrent_data(Config) ->
     StatOfUnreconciledGet =
         proplists:get_value(kai_unreconciled_get,
                             rpc:call(Node1, kai_stat, all, [])),
-    ?assertEqual("1(1) 0(0)", lists:flatten(StatOfUnreconciledGet)),
+    ?assertEqual("1(1)",
+                 lists:sublist(lists:flatten(StatOfUnreconciledGet), 4)),
 
     ok.
 
