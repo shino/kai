@@ -1,0 +1,26 @@
+2009-05-21
+			  Kai Cacti Templates
+
+Cacti template files are used for drawing status of Kai node obtained
+by the stats command.
+
+1. Pre-requisite
+
+- PECL memcached library, which can be downloaded the following URL:
+
+  http://pecl.php.net/package/memcached
+
+2. Installation
+
+- install kai.php into the Cacti scripts directory, as follows:
+
+  $ cp -p kai.php <cacti-path>/scripts/
+
+- After logging-in Cacti, then choose "Import Templates" from the
+  left-side menu bar, and import the following XML files:
+
+  cacti_graph_template_kai_transfer.xml
+  cacti_graph_template_kai_curr_items.xml
+  cacti_graph_template_kai_command.xml
+  cacti_graph_template_kai_byte.xml
+  cacti_data_template_kai.xml
