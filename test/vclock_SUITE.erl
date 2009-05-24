@@ -16,7 +16,9 @@
 -include("kai.hrl").
 -include("kai_test.hrl").
 
-all() -> [test_desceds_in_single_node].
+all() -> [test_desceds_in_single_node,
+          test_concurrent,
+          test_merge].
 
 test_desceds_in_single_node() -> [].
 
@@ -51,8 +53,15 @@ test_merge(_Conf) ->
     C1 = vclock:merge([A2, B2]),
     ?assert(vclock:descends(C1, A2)),
     ?assert(vclock:descends(C1, B2)),
+    ?assertNot(vclock:descends(A2, C1)),
+    ?assertNot(vclock:descends(B2, C1)),
+
     C2 = vclock:increment(c, C1),
-    ?assertNot(vclock:descends(C2, A2)),
-    ?assertNot(vclock:descends(C2, B2)),
-    ?assertNot(vclock:descends(C2, C1)),
+
+    ?assert(vclock:descends(C2, A2)),
+    ?assert(vclock:descends(C2, B2)),
+    ?assert(vclock:descends(C2, C1)),
+
+    ?assertNot(vclock:descends(A2, C2)),
+    ?assertNot(vclock:descends(B2, C2)),
     ok.
