@@ -21,7 +21,6 @@
         ]).
 
 -include("kai.hrl").
--record(state, {vector_clocks}).
 
 -define(SERVER, ?MODULE).
 -define(CAS_UNIQUE_BITS, 64).
@@ -29,19 +28,15 @@ start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], _Opts = []).
 
 init(_Args) ->
-    NodeVClock = vclock:increment(kai_config:get(node), vclock:fresh()),
-    {ok, #state{vector_clocks = NodeVClock}}.
+    {ok, []}.
 
 terminate(_Reason, _State) ->
     ok.
 
 update(Data, State) ->
-    NodeVClock =State#state.vector_clocks,
-    NewNodeVClock = vclock:increment(kai_config:get(node), NodeVClock),
     NewDataVClock = vclock:increment(kai_config:get(node), Data#data.vector_clocks),
-    NewState = State#state{vector_clocks = NewNodeVClock},
     {reply,
-     {ok, Data#data{last_modified=now(), vector_clocks=NewDataVClock}}, NewState }.
+     {ok, Data#data{last_modified=now(), vector_clocks=NewDataVClock}}, State }.
 
 do_order([], []) ->
     undefined;
