@@ -1,14 +1,14 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_version).
 -behaviour(gen_server).
@@ -24,6 +24,7 @@
 
 -define(SERVER, ?MODULE).
 -define(CAS_UNIQUE_BITS, 64).
+
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], _Opts = []).
 
@@ -44,11 +45,13 @@ do_order([], UniqList) ->
     UniqList;
 do_order([Data|Rest], UniqList) ->
     VClock = Data#data.vector_clocks,
-    case lists:any(fun(Other) -> vclock:descends(Other#data.vector_clocks, VClock) end, Rest) of
+    Comp = fun(Other) -> vclock:descends(Other#data.vector_clocks, VClock) end,
+    case lists:any(Comp, Rest) of
         true ->
             do_order(Rest, UniqList);
         _ ->
-            case lists:any(fun(Other) -> vclock:descends(Other#data.vector_clocks, VClock) end, UniqList) of
+            Comp2 = fun(Other) -> vclock:descends(Other#data.vector_clocks, VClock) end,
+            case lists:any(Comp2, UniqList) of
                 true ->
                     do_order(Rest, UniqList);
                 _ ->
@@ -56,25 +59,25 @@ do_order([Data|Rest], UniqList) ->
             end
     end.
 
-order(ListOfData, State) when is_list(ListOfData) ->
-    OrderedData = do_order(ListOfData, []),
+order(DataList, State) when is_list(DataList) ->
+    OrderedData = do_order(DataList, []),
     {reply, OrderedData, State};
 order(_Other, State) ->
     {reply, undefined, State}.
 
 
 %% TODO: raise error if length > 15(=2#1111)
-cas_unique(ListOfData) when length(ListOfData) > 2#1111 ->
-    {error, lists:flatten(io_lib:format("data list is too long (~p)", [length(ListOfData)]))};
-cas_unique(ListOfData) ->
-    Length = length(ListOfData),
+cas_unique(DataList) when length(DataList) > 2#1111 ->
+    {error, lists:flatten(io_lib:format("data list is too long (~p)", [length(DataList)]))};
+cas_unique(DataList) ->
+    Length = length(DataList),
     EachBits = trunc(60/Length),
     %% TODO: make 128 contant 2008/11/06 by shino
     RestBits = 128- EachBits,
     cas_unique(lists:map(fun (Data) ->
                                  <<CheckSum:EachBits, _:RestBits>> = Data#data.checksum,
                                  CheckSum
-                         end, ListOfData),
+                         end, DataList),
                EachBits,
                Length,
                4).
@@ -91,8 +94,8 @@ handle_call(stop, _From, State) ->
     {stop, normal, stopped, State};
 handle_call({update, Data}, _From, State) ->
     update(Data, State);
-handle_call({order, ListOfData}, _From, State) ->
-    order(ListOfData, State).
+handle_call({order, DataList}, _From, State) ->
+    order(DataList, State).
 handle_cast(_Msg, State) ->
     {noreply, State}.
 handle_info(_Info, State) ->
@@ -104,5 +107,5 @@ stop() ->
     gen_server:call(?SERVER, stop).
 update(Data) ->
     gen_server:call(?SERVER, {update, Data}).
-order(ListOfData) ->
-    gen_server:call(?SERVER, {order, ListOfData}).
+order(DataList) ->
+    gen_server:call(?SERVER, {order, DataList}).

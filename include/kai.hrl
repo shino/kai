@@ -35,4 +35,3 @@
 -define(debug(_Data), ok).
 
 -define(TIMEOUT, 5000).
--define(TIMER, 1000).

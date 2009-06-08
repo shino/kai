@@ -1,134 +1,155 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_connection_SUITE).
 -compile(export_all).
 
+-include("ct.hrl").
 -include("kai.hrl").
 -include("kai_test.hrl").
 
-all() -> [test1, test2].
+-record(connection, {node, available, socket}). %% Defined in src/kai_connection.erl
 
-test1_api_start() ->
-    {ok, ListeningSocket} =
-        gen_tcp:listen(11012, [binary, {packet, 4}, {reuseaddr, true}]),
-    test1_api_accpet(ListeningSocket).
+-define(UNKNOWN, {{127,0,0,1}, 1}).
+-define(MAX_CONNS, 4).
 
-test1_api_accpet(ListeningSocket) ->
-    {ok, ApiSocket} = gen_tcp:accept(ListeningSocket),
-    Pid = spawn(?MODULE, test1_api_proc, [ApiSocket]),
-    gen_tcp:controlling_process(ApiSocket, Pid),
-    test1_api_accpet(ListeningSocket).
+sequences() ->
+    [{seq, [lease, return, close, unknown, multiple_processes, max_connections,
+            lru]}].
 
-test1_api_proc(ApiSocket) ->
-    receive
-        {tcp, ApiSocket, _Bin} ->
-            gen_tcp:send(ApiSocket, term_to_binary(ok))
-    end.
+all() -> [{sequence, seq}].
 
-test1_api_send(Pid) ->
-    {ok, Socket} = kai_connection:lease(?NODE2, self()),
-    ok = gen_tcp:send(Socket, term_to_binary(ok)),
-    Pid ! receive {tcp, Socket, Bin} -> binary_to_term(Bin) end.
-
-test1() -> [].
-test1(_Conf) ->
-    kai_config:start_link([
-        {hostname, "localhost"},
-        {rpc_port, 11011},
-        {max_connections, 32},
-        {n, 3},
-        {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2}
-    ]),
+init_per_testcase(_TestCase, Conf) ->
+    kai_config:start_link([{rpc_port, ?PORT1},
+                           {quorum, {3,2,2}},
+                           {max_connections, ?MAX_CONNS},
+                           {buckets, 4},
+                           {virtual_nodes, 2}]),
     kai_connection:start_link(),
+    spawn_link(?MODULE, echo_start, [?PORT2]),
+    Conf.
 
-    spawn_link(?MODULE, test1_api_start, []),
+end_per_testcase(_TestCase, _Conf) ->
+    kai_connection:stop(),
+    kai_config:stop().
 
-    % lease and return
+lease(_Conf) ->
+    {ok, []} = kai_connection:connections(),
 
-    {ok, Socket1} = kai_connection:lease(?NODE2, self()),
-    {ok, Connections} = kai_connection:connections(),
-    ?assertEqual(1, length(Connections)),
+    {ok, Socket} = kai_connection:lease(?NODE2, self()),
+    ?assert(is_port(Socket)),
+
+    gen_tcp:send(Socket, term_to_binary(ok)),
+    ok = receive {tcp, _, Bin} -> binary_to_term(Bin) end,
+
+    {ok, [_]} = kai_connection:connections(),
+
+    {ok, Socket2} =
+        kai_connection:lease(?NODE2, self(), [{active, true}, {packet, 4}]),
+    ?assert(Socket =/= Socket2),
+
+    {ok, [_,_]} = kai_connection:connections().
+
+return(_Conf) ->
+    {ok, Socket} = kai_connection:lease(?NODE2, self()),
+    ?assert(is_port(Socket)),
+    
+    {ok, [_]} = kai_connection:connections(),
+
+    ok = kai_connection:return(Socket),
+
+    {ok, [_]} = kai_connection:connections(),
 
     {ok, Socket2} = kai_connection:lease(?NODE2, self()),
-    {ok, Connections2} = kai_connection:connections(),
-    ?assertEqual(2, length(Connections2)),
+    ?assert(Socket =:= Socket2),
 
-    ?assert(Socket1 =/= Socket2),
-    
-    ok = kai_connection:return(Socket1),
-    {ok, Connections3} = kai_connection:connections(),
-    ?assertEqual(2, length(Connections3)),
+    {ok, [_]} = kai_connection:connections().
 
-    {ok, Socket3} = kai_connection:lease(?NODE2, self(), [{active, true}, {packet, 4}]),
+close(_Conf) ->
+    {ok, Socket} = kai_connection:lease(?NODE2, self()),
+    ?assert(is_port(Socket)),
 
-    ?assert(Socket1 =:= Socket3),
+    {ok, [_]} = kai_connection:connections(),
 
-    ok = kai_connection:close(Socket3),
-    {ok, Connections4} = kai_connection:connections(),
-    ?assertEqual(1, length(Connections4)),
+    ok = kai_connection:close(Socket),
 
-    % send and receive at different processes
+    {ok, []} = kai_connection:connections().
 
-    spawn_link(?MODULE, test1_api_send, [self()]),
-    ?assert(receive ok -> true; _ -> false end),
+unknown(_Conf) ->
+    {error, econnrefused} = kai_connection:lease(?UNKNOWN, self()).
 
-    spawn_link(?MODULE, test1_api_send, [self()]),
-    ?assert(receive ok -> true; _ -> false end),
+multiple_processes(_Conf) ->
+    {ok, Socket} = kai_connection:lease(?NODE2, self()),
+    ?assert(is_port(Socket)),
 
-    kai_config:stop(),
-    kai_connection:stop().
+    lists:foreach(
+      fun(_) ->
+              spawn_link(?MODULE, lease_and_send, [self()]),
+              ?assert(receive ok -> true; _ -> false end)
+      end,
+      lists:seq(1, 4)
+     ).
 
-test2() -> [].
-test2(_Conf) ->
-    MaxConnections = 32,
-
-    kai_config:start_link([
-        {hostname, "localhost"},
-        {rpc_port, 11011},
-        {max_connections, MaxConnections},
-        {n, 3},
-        {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2}
-    ]),
-    kai_connection:start_link(),
-
-    spawn_link(?MODULE, test1_api_start, []),
-
-    % lease MaxConnections connections
-
+max_connections(_Conf) ->
     Sockets =
         lists:map(
-          fun(_X) ->
+          fun(_) ->
                   {ok, Socket} = kai_connection:lease(?NODE2, self()),
                   Socket
           end,
-          lists:seq(1, MaxConnections + 1)
+          lists:seq(1, ?MAX_CONNS + 1)
          ),
 
-    % # of connections can be greater than MaxConnections, because all
-    % connections are in use
+    %% The number of connections can be greater than MAX_CONNS when all
+    %% connections are in use.
+    {ok, Conns} = kai_connection:connections(),
+    ?assertEqual(?MAX_CONNS + 1, length(Conns)),
 
-    {ok, Connections} = kai_connection:connections(),
-    ?assertEqual(MaxConnections + 1, length(Connections)),
-
-    % # of connections equals to MaxConnections, because a connection has
-    % been returned
-
+    %% The number of connections equals to MAX_CONNS, because a connection has
+    %% been returned.
     [Socket|_] = Sockets,
     ok = kai_connection:return(Socket),
-    {ok, Connections2} = kai_connection:connections(),
-    ?assertEqual(MaxConnections, length(Connections2)),
+    {ok, Conns2} = kai_connection:connections(),
+    ?assertEqual(?MAX_CONNS, length(Conns2)).
 
-    kai_config:stop(),
-    kai_connection:stop().
+lru(_Conf) ->
+    {ok, _Socket} = kai_connection:lease(?NODE2, self()),
+    {ok, Socket2} = kai_connection:lease(?NODE2, self()),
+    {ok, Socket3} = kai_connection:lease(?NODE2, self()),
+
+    %% Here, the connections are ordered like 3, 2, and 1.
+    {ok, [Conn|_]} = kai_connection:connections(),
+    Socket3 = Conn#connection.socket,
+
+    %% Socket2 is moved to the head.
+    ok = kai_connection:return(Socket2),
+    {ok, [Conn2|_]} = kai_connection:connections(),
+    Socket2 = Conn2#connection.socket.
+
+echo_start(Port) ->
+    {ok, ListenSocket} =
+        gen_tcp:listen(Port, [binary, {packet, 4}, {reuseaddr, true}]),
+    echo_accpet(ListenSocket).
+
+echo_accpet(ListenSocket) ->
+    {ok, Socket} = gen_tcp:accept(ListenSocket),
+    Pid = spawn_link(?MODULE, echo_proc, [Socket]),
+    gen_tcp:controlling_process(Socket, Pid),
+    echo_accpet(ListenSocket).
+
+echo_proc(Socket) ->
+    receive {tcp, Socket, Bin} -> gen_tcp:send(Socket, Bin) end.
+
+lease_and_send(Pid) ->
+    {ok, Socket} = kai_connection:lease(?NODE2, self()),
+    ok = gen_tcp:send(Socket, term_to_binary(ok)),
+    Pid ! receive {tcp, Socket, Bin} -> binary_to_term(Bin) end.

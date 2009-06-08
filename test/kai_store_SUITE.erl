@@ -1,278 +1,173 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_store_SUITE).
 -compile(export_all).
 
+-include("ct.hrl").
 -include("kai.hrl").
 -include("kai_test.hrl").
 
-all() -> [test_ets, test_dets,
-          test_update_conflict_ets, test_update_conflict_dets,
-          test_perf].
+-define(ETS_ARGS,  [{rpc_port, 11011},
+                    {quorum, {3,2,2}},
+                    {buckets, 4},
+                    {virtual_nodes, 2},
+                    {store, ets}]).
+-define(DETS_ARGS, [{rpc_port, 11011},
+                    {quorum, {3,2,2}},
+                    {buckets, 4},
+                    {virtual_nodes, 2},
+                    {store, dets},
+                    {dets_dir, "."},
+                    {dets_tables, 2}]).
 
-test(Conf) ->
-    kai_config:start_link(Conf),
-    kai_config:start_link([
-        {hostname, "localhost"},
-        {rpc_port, 11511},
-        {rpc_max_processes, 2},
-        {max_connections, 32},
-        {n, 1}, {r, 1}, {w, 1},
-        {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2}
-    ]),
-    kai_version:start_link(),
+sequences() ->
+    [{ ets, [ ets_crud,  ets_conflict,  ets_info,  ets_perf]},
+     {dets, [dets_crud, dets_conflict, dets_info, dets_perf]}].
+
+all() -> [{sequence, ets}, {sequence, dets}].
+
+init_per_testcase(TestCase, Conf) ->
+    case atom_to_list(TestCase) of
+        ["dets"|_] -> init(Conf, ?DETS_ARGS);
+        _          -> init(Conf, ?ETS_ARGS)
+    end.
+
+init(Conf, Args) ->
+    kai_config:start_link(Args),
     kai_store:start_link(),
-
-    Data1 = #data{
-        key           = "item-1",
-        bucket        = 3,
-        last_modified = now(),
-        checksum      = erlang:md5(<<"value-1">>),
-        flags         = "0",
-        vector_clocks = vclock:fresh(),
-        value         = (<<"value-1">>)
-    },
-
-    kai_store:put(Data1),
-
-    ?assertEqual(
-       Data1,
-       kai_store:get(#data{key="item-1", bucket=3})
-      ),
-    ?assertEqual(
-       undefined,
-       kai_store:get(#data{key="item-2", bucket=1})
-      ),
-
-    Data2 = #data{
-        key           = "item-2",
-        bucket        = 1,
-        last_modified = now(),
-        checksum      = erlang:md5(<<"value-2">>),
-        flags         = "0",
-        vector_clocks = [],
-        value         = (<<"value-2">>)
-    },
-    kai_store:put(Data2),
-    ?assertEqual(
-       Data2,
-       kai_store:get(#data{key="item-2", bucket=1})
-      ),
-
-    Data3 = #data{
-        key           = "item-3",
-        bucket        = 3,
-        last_modified = now(),
-        checksum      = erlang:md5(<<"value-3">>),
-        flags         = "0",
-        vector_clocks = [],
-        value         = (<<"value-3">>)
-    },
-    kai_store:put(Data3),
-    ?assertEqual(
-       Data3,
-       kai_store:get(#data{key="item-3", bucket=3})
-      ),
-
-    {list_of_data, ListOfData1} = kai_store:list(1),
-    ?assertEqual(1, length(ListOfData1)),
-    ?assert(lists:keymember("item-2", 2, ListOfData1)),
-
-    {list_of_data, ListOfData2} = kai_store:list(2),
-    ?assertEqual(0, length(ListOfData2)),
-
-    {list_of_data, ListOfData3} = kai_store:list(3),
-    ?assertEqual(2, length(ListOfData3)),
-    ?assert(lists:keymember("item-1", 2, ListOfData3)),
-    ?assert(lists:keymember("item-3", 2, ListOfData3)),
-
-    Data1b = #data{
-        key           = "item-1",
-        bucket        = 3,
-        last_modified = now(),
-        checksum      = erlang:md5(<<"value-1">>),
-        flags         = "0",
-        vector_clocks = [],
-        value         = (<<"value-1b">>)
-    },
-
-    kai_store:put(Data1b),
-    ?assertEqual(
-       Data1b,
-       kai_store:get(#data{key="item-1", bucket=3})
-      ),
-
-    kai_store:delete(#data{key="item-1", bucket=3}),
-
-    ?assertEqual(
-       undefined,
-       kai_store:get(#data{key="item-1", bucket=3})
-      ),
-
-    {list_of_data, ListOfData4} = kai_store:list(3),
-    ?assertEqual(1, length(ListOfData4)),
-    ?assert(lists:keymember("item-3", 2, ListOfData4)),
-
-    ?assert(is_integer(kai_store:info(bytes))),
-    ?assertEqual(2, kai_store:info(size)),
-
+    Conf.
+   
+end_per_testcase(_TestCase, _Conf) ->
     kai_store:stop(),
-    kai_version:stop(),
     kai_config:stop(),
+    file:delete("./1"), file:delete("./2"). %% Deletes dets files
 
-    ok.
+ets_crud(_Conf) -> crud().
+dets_crud(_Conf) -> crud().
 
-test_ets() -> [].
-test_ets(_Conf) ->
-    test([
-        {hostname, "localhost"},
-        {rpc_port, 11011},
-        {n, 3},
-        {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2},
-        {store, ets}
-    ]).
-
-test_dets() -> [].
-test_dets(_Conf) ->
-    test([
-        {hostname, "localhost"},
-        {rpc_port, 11011},
-        {n, 3},
-        {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2},
-        {store, dets},
-        {dets_dir, "."},
-        {number_of_tables, 2}
-    ]),
-    file:delete("./1"), file:delete("./2").
-
-test_update_conflict(Conf) ->
-    kai_config:start_link(Conf),
-    kai_config:start_link([
-        {hostname, "localhost"},
-        {rpc_port, 11511},
-        {rpc_max_processes, 2},
-        {max_connections, 32},
-        {n, 1}, {r, 1}, {w, 1},
-        {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2}
-    ]),
-    kai_version:start_link(),
-    kai_store:start_link(),
-
-    Data1 = #data{
-      key           = "item-1",
+crud() ->
+    Data = #data{
+      key           = "key1",
       bucket        = 3,
       last_modified = now(),
-      checksum      = erlang:md5(<<"value-1">>),
+      checksum      = erlang:md5(<<"value1">>),
+      flags         = "0",
+      vector_clocks = vclock:fresh(),
+      value         = <<"value1">>
+     },
+    ok = kai_store:put(Data),
+
+    Data = kai_store:get(#data{key="key1", bucket=3}),
+    undefined = kai_store:get(#data{key="key2", bucket=1}),
+
+    {ok, [Key]} = kai_store:list(3),
+    "key1" = Key#data.key,
+
+    Data2 = #data{
+      key           = "key1",
+      bucket        = 3,
+      last_modified = now(),
+      checksum      = erlang:md5(<<"value2">>),
+      flags         = "0",
+      vector_clocks = vclock:increment(node1, Data#data.vector_clocks),
+      value         = <<"value2">>
+     },
+
+    ok = kai_store:put(Data2),
+    Data2 = kai_store:get(#data{key="key1", bucket=3}),
+
+    ok = kai_store:delete(#data{key="key1", bucket=3}),
+
+    undefined = kai_store:get(#data{key="key1", bucket=3}),
+    undefined = kai_store:delete(#data{key="key1", bucket=3}).
+
+ets_conflict(_Conf) -> conflict().
+dets_conflict(_Conf) -> conflict().
+
+conflict() ->
+    Data = #data{
+      key           = "key1",
+      bucket        = 3,
+      last_modified = now(),
+      checksum      = erlang:md5(<<"value1">>),
       flags         = "0",
       vector_clocks = vclock:increment(node1, vclock:fresh()),
-      value         = (<<"value-1">>)
+      value         = <<"value1">>
      },
-    kai_store:put(Data1),
+    ok = kai_store:put(Data),
 
-    %% conflict vclock
-    Data2 = Data1#data{
-              vector_clocks = vclock:increment(node2, vclock:fresh())
-             },
+    {error, _Reason} =
+        kai_store:put(Data#data{
+                        %% Conflicting VectorClocks
+                        vector_clocks = vclock:increment(node2, vclock:fresh())
+                       }).
 
-    {error, Reason} = kai_store:put(Data2),
-    ct:pal(default, "~p: ~p~n", ["Reason", Reason]),
+ets_info(_Conf) -> info().
+dets_info(_Conf) -> info().
 
-    kai_store:stop(),
-    kai_version:stop(),
-    kai_config:stop(),
+info() ->
+    ?assert(is_integer(kai_store:info(bytes))),
+    ?assertEqual(0, kai_store:info(size)),
 
-    ok.
+    ok = kai_store:put(#data{
+        key           = "key1",
+        bucket        = 3,
+        last_modified = now(),
+        checksum      = erlang:md5(<<"value1">>),
+        flags         = "0",
+        vector_clocks = vclock:fresh(),
+        value         = <<"value1">>
+    }),
 
-test_update_conflict_ets() -> [].
-test_update_conflict_ets(_Conf) ->
-    test_update_conflict([
-        {hostname, "localhost"},
-        {rpc_port, 11011},
-        {n, 3},
-        {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2},
-        {store, ets}
-    ]).
+    ?assert(is_integer(kai_store:info(bytes))),
+    ?assertEqual(1, kai_store:info(size)),
 
-test_update_conflict_dets() -> [].
-test_update_conflict_dets(_Conf) ->
-    test_update_conflict([
-        {hostname, "localhost"},
-        {rpc_port, 11011},
-        {n, 3},
-        {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2},
-        {store, dets},
-        {dets_dir, "."},
-        {number_of_tables, 2}
-    ]),
-    file:delete("./1"), file:delete("./2").
+    ok = kai_store:delete(#data{key="key1", bucket=3}),
 
-test_perf_put(T) ->
-    lists:foreach(
-      fun(I) ->
-          Key = "item-" ++ integer_to_list(I),
-          Value = list_to_binary("value-" ++ integer_to_list(I)),
-          Data = #data{
-              key           = Key,
-              bucket        = 3,
-              last_modified = now(),
-              checksum      = erlang:md5(Value),
-              flags         = "0",
-              vector_clocks = [],
-              value         = Value
-          },
-          kai_store:put(Data)
-      end,
-      lists:seq(1, T)
-     ).
+    ?assert(is_integer(kai_store:info(bytes))),
+    ?assertEqual(0, kai_store:info(size)).
 
-test_perf_get(T) ->
-    lists:foreach(
-      fun(I) ->
-          Key = "item-" ++ integer_to_list(I),
-          kai_store:get(#data{key=Key, bucket=0})
-      end,
-      lists:seq(1, T)
-     ).
+ets_perf(_Conf) -> perf(1000).
+dets_perf(_Conf) -> perf(10).
 
-test_perf() -> [].
-test_perf(_Conf) ->
-    kai_config:start_link([
-        {hostname, "localhost"},
-        {rpc_port, 11011},
-        {n, 3},
-        {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2},
-        {store, ets}
-    ]),
-    kai_store:start_link(),
+perf(T) ->
+    {Usec, _} = timer:tc(?MODULE, perf_put, [T]),
+    ct:log("Average time to put a key: ~p us", [Usec/T]),
 
-    T = 10000,
+    {Usec2, _} = timer:tc(?MODULE, perf_get, [T]),
+    ct:log("Average time to get a key: ~p us", [Usec2/T]).
 
-    {Usec, _} = timer:tc(?MODULE, test_perf_put, [T]),
-    ?assert(Usec < 100*T),
-    io:format("average time to put data: ~p [usec]", [Usec/T]),
+perf_put(0) -> ok;
+perf_put(I) ->
+    Key = "key" ++ integer_to_list(I),
+    Value = <<0:1024>>, %% 1 KB
+    ok = kai_store:put(#data{
+      key           = Key,
+      bucket        = 0,
+      last_modified = now(),
+      checksum      = erlang:md5(Value),
+      flags         = "0",
+      vector_clocks = vclock:fresh(),
+      value         = Value
+     }),
+    perf_put(I-1).
 
-    {Usec2, _} = timer:tc(?MODULE, test_perf_get, [T]),
-    ?assert(Usec2 < 100*T),
-    io:format("average time to get data: ~p [usec]", [Usec2/T]),
-    kai_store:stop(),
-    kai_config:stop().
-
-p(Label, Message) ->
-    ct:pal(default, "~p: ~p~n", [Label, Message]).
+perf_get(0) -> ok;
+perf_get(I) ->
+    Key = "key" ++ integer_to_list(I),
+    Data = kai_store:get(#data{key=Key, bucket=0}),
+    ?assertEqual(
+       Key,
+       Data#data.key
+      ),
+    perf_get(I-1).

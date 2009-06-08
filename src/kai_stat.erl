@@ -1,14 +1,14 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_stat).
 -behaviour(gen_server).
@@ -22,10 +22,11 @@
         ]).
 
 -include("kai.hrl").
+
 -record(state, {
           boot_time, cmd_get, cmd_set, bytes_read, bytes_write,
-          unreconciled_get, node, quorum,
-          number_of_buckets, number_of_virtual_nodes, store
+          kai_node, kai_quorum, kai_buckets, kai_virtual_nodes,
+          kai_store, kai_unreconciled_get
 }).
 
 -define(SERVER, ?MODULE).
@@ -36,48 +37,40 @@ start_link() ->
 init(_Args) ->
     {Msec, Sec, _Usec} = now(),
     BootTime = 1000000 * Msec + Sec,
-    [LocalNode, N, R, W, NumberOfBuckets, NumberOfVirtualNodes, Store] =
-        kai_config:get([
-            node, n, r, w, number_of_buckets, number_of_virtual_nodes, store
-        ]),
-    Quorum = join(",", [integer_to_list(X) || X <- [N, R, W]]),
+    [LocalNode, {N,R,W}, BucketNum, VirtualNodeNum, Store] =
+        kai_config:get([node, quorum, buckets, virtual_nodes, store]),
+    Quorum = string:join([integer_to_list(X) || X <- [N, R, W]], ","),
     {ok, #state{
-       boot_time               = BootTime,
-       cmd_get                 = 0,
-       cmd_set                 = 0,
-       bytes_read              = 0,
-       bytes_write             = 0,
-       unreconciled_get        = array:new([{size, N-1}, {fixed, false},
-                                            {default, [0,0]}]),
-       node                    = LocalNode,
-       quorum                  = Quorum,
-       number_of_buckets       = NumberOfBuckets,
-       number_of_virtual_nodes = NumberOfVirtualNodes,
-       store                   = Store
+       boot_time            = BootTime,
+       cmd_get              = 0,
+       cmd_set              = 0,
+       bytes_read           = 0,
+       bytes_write          = 0,
+       kai_node             = LocalNode,
+       kai_quorum           = Quorum,
+       kai_buckets          = BucketNum,
+       kai_virtual_nodes    = VirtualNodeNum,
+       kai_store            = Store,
+       kai_unreconciled_get = array:new([{size, N-1}, {fixed, false}, {default, [0,0]}])
       }}.
 
 terminate(_Reason, _State) ->
     ok.
 
-join(_Delimiter, [], Acc) ->
-    Acc;
-join(_Delimiter, [Token], Acc) ->
-    Acc ++ Token;
-join(Delimiter, [Token|Rest], Acc) ->
-    join(Delimiter, Rest, Acc ++ Token ++ Delimiter).
-join(Delimiter, List) ->
-    join(Delimiter, List, []).
-
 node_to_list({{A1,A2,A3,A4}, Port}) ->
-    Addr = join(".", [integer_to_list(X) || X <- [A1,A2,A3,A4]]),
+    Addr = string:join([integer_to_list(X) || X <- [A1,A2,A3,A4]], "."),
     Addr ++ ":" ++ integer_to_list(Port).
 
 format_unreconciled_get(UnreconciledGet) ->
-    join(" ",
-         array:foldr(
-           fun(_Index, [UnReconciled, InternalNum], Acc) ->
-                   [io_lib:format("~B(~B)", [UnReconciled, InternalNum]) | Acc]
-           end, [], UnreconciledGet)).
+    lists:flatten(
+      string:join(
+        array:foldr(
+          fun(_Index, [UnReconciled, InternalNum], Acc) ->
+                  [io_lib:format("~B(~B)", [UnReconciled, InternalNum]) | Acc]
+          end, [], UnreconciledGet
+         ), " "
+       )
+     ).
 
 stat(Name, State) ->
     case Name of
@@ -103,8 +96,13 @@ stat(Name, State) ->
             Size = kai_store:info(size),
             {curr_items, integer_to_list(Size)};
         curr_connections ->
-            Connections = kai_tcp_server:info(kai_memcache, curr_connections),
-            {curr_connections, integer_to_list(Connections)};
+            Conns =
+                try
+                    kai_tcp_server:info(kai_memcache, curr_connections)
+                catch
+                    exit:{noproc, _} -> 0
+                end,
+            {curr_connections, integer_to_list(Conns)};
         cmd_get ->
             {cmd_get, integer_to_list(State#state.cmd_get)};
         cmd_set ->
@@ -114,28 +112,27 @@ stat(Name, State) ->
         bytes_write ->
             {bytes_write, integer_to_list(State#state.bytes_write)};
         kai_node ->
-            {kai_node, node_to_list(State#state.node)};
+            {kai_node, node_to_list(State#state.kai_node)};
         kai_quorum ->
-            {kai_quorum, State#state.quorum};
-        kai_number_of_buckets ->
-            NumberOfBuckets = State#state.number_of_buckets,
-            {kai_number_of_buckets, integer_to_list(NumberOfBuckets)};
-        kai_number_of_virtual_nodes ->
-            NumberOfVirtualNodes = State#state.number_of_virtual_nodes,
-            {kai_number_of_virtual_nodes,
-             integer_to_list(NumberOfVirtualNodes)};
+            {kai_quorum, State#state.kai_quorum};
+        kai_buckets ->
+            BucketNum = State#state.kai_buckets,
+            {kai_buckets, integer_to_list(BucketNum)};
+        kai_virtual_nodes ->
+            VirtualNodeNum = State#state.kai_virtual_nodes,
+            {kai_virtual_nodes, integer_to_list(VirtualNodeNum)};
         kai_store ->
-            {kai_store, atom_to_list(State#state.store)};
+            {kai_store, atom_to_list(State#state.kai_store)};
         kai_curr_nodes ->
-            {node_list, Nodes} = kai_hash:node_list(),
+            {ok, Nodes} = kai_hash:node_list(),
             NodesInList = lists:sort([node_to_list(N) || N <- Nodes]),
-            {kai_curr_nodes, join(" ", NodesInList)};
+            {kai_curr_nodes, string:join(NodesInList, " ")};
         kai_unreconciled_get ->
             {kai_unreconciled_get,
-             format_unreconciled_get(State#state.unreconciled_get)};
+             format_unreconciled_get(State#state.kai_unreconciled_get)};
 %        kai_curr_buckets ->
-%            {buckets, Buckets} = kai_hash:buckets(),
-%            {kai_curr_buckets, join(" ", [integer_to_list(B) || B <- Buckets])};
+%            {ok, Buckets} = kai_hash:buckets(),
+%            {kai_curr_buckets, string:join([integer_to_list(B) || B <- Buckets], " ")};
         erlang_procs ->
             ErlangProcs = erlang:system_info(process_count),
             {erlang_procs, integer_to_list(ErlangProcs)};
@@ -150,10 +147,11 @@ all(State) ->
           [uptime, time, version, bytes,
            curr_items, curr_connections, cmd_get, cmd_set,
            bytes_read, bytes_write,
-           kai_node, kai_quorum, kai_number_of_buckets,
-           kai_number_of_virtual_nodes, kai_store, kai_curr_nodes,
+           kai_node, kai_quorum, kai_buckets,
+           kai_virtual_nodes, kai_store, kai_curr_nodes,
            kai_unreconciled_get,
-           %kai_curr_buckets,
+%           kai_curr_buckets,
+           %% TODO: Other statistics; max_processes, max_connections, intervals
            erlang_procs, erlang_version]
          ),
     {reply, Stats, State}.
@@ -167,8 +165,8 @@ incr_cmd_set(State) ->
     {noreply, State2}.
 
 incr_unreconciled_get(InternalNum, Reconciled, State) ->
-    Old = State#state.unreconciled_get,
-    Index = InternalNum -2,  % index is 0: two versions, 1: three, etc.
+    Old = State#state.kai_unreconciled_get,
+    Index = InternalNum -2,  %% index is 0: two versions, 1: three, etc.
     [Unreconciled, Internal] = array:get(Index, Old),
     New = array:set(InternalNum -2,
                     case Reconciled of
@@ -176,7 +174,7 @@ incr_unreconciled_get(InternalNum, Reconciled, State) ->
                         _ -> [Unreconciled + 1, Internal + 1]
                     end,
                     Old),
-    State2 = State#state{unreconciled_get = New},
+    State2 = State#state{kai_unreconciled_get = New},
     {noreply, State2}.
 
 add_bytes_read(Data, State) ->

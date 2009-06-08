@@ -1,14 +1,14 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_rpc).
 -behaviour(kai_tcp_server).
@@ -16,12 +16,15 @@
 -export([start_link/0, stop/0]).
 -export([init/1, handle_call/3]).
 -export([
-    node_info/1, node_list/1,
-    list/2, get/2, put/2, delete/2,
-    check_node/2, route/2
+    ok/2,
+    node_info/2, node_list/2,
+    list/3, get/3, put/3, delete/3,
+    check_node/3, route/3
 ]).
 
 -include("kai.hrl").
+
+-record(state, {node_info}).
 
 start_link() ->
     kai_tcp_server:start_link(
@@ -37,13 +40,17 @@ start_link() ->
 
 stop() -> kai_tcp_server:stop(?MODULE).
 
-init(_Args) -> {ok, {}}.
+init(_Args) ->
+    {ok, #state{node_info = kai_config:node_info()}}.
 
 handle_call(Socket, Data, State) ->
     dispatch(Socket, binary_to_term(Data), State).
 
+dispatch(_Socket, ok, State) ->
+    reply(ok, State);
+
 dispatch(_Socket, node_info, State) ->
-    reply(kai_config:node_info(), State);
+    reply(State#state.node_info, State);
 
 dispatch(_Socket, node_list, State) ->
     reply(kai_hash:node_list(), State);
@@ -63,8 +70,8 @@ dispatch(_Socket, {delete, Data}, State) ->
 dispatch(_Socket, {check_node, Node}, State) ->
     reply(kai_membership:check_node(Node), State);
 
-dispatch(_Socket, {route, Request}, State) ->
-    reply(kai_coordinator:route(Request), State);
+dispatch(_Socket, {route, SrcNode, Request}, State) ->
+    reply(kai_coordinator:route(SrcNode, Request), State);
 
 dispatch(_Socket, _Unknown, State) ->
     reply({error, enotsup}, State).
@@ -72,18 +79,18 @@ dispatch(_Socket, _Unknown, State) ->
 reply(Data, State) ->
     {reply, term_to_binary(Data), State}.
 
-recv_response(ApiSocket) ->
+recv_response(Socket) ->
     receive
-        {tcp, ApiSocket, Bin} ->
+        {tcp, Socket, Bin} ->
             {ok, binary_to_term(Bin)};
-        {tcp_closed, ApiSocket} ->
+        {tcp_closed, Socket} ->
             {error, econnreset};
         {error, Reason} ->
             {error, Reason}
 
-        % Don't place Other alternative here.  This is to avoid to catch event
-        % messages, '$gen_event' or something like that.  Remember that this
-        % function can be called from gen_fsm/gen_event.
+        %% Don't place Other alternative here.  This is to avoid to catch event
+        %% messages, '$gen_event' or something like that.  Remember that this
+        %% function can be called from gen_fsm/gen_event.
 
     after ?TIMEOUT ->
             {error, timeout}
@@ -91,19 +98,19 @@ recv_response(ApiSocket) ->
 
 do_request(Node, Message) ->
     case kai_connection:lease(Node, self()) of
-        {ok, ApiSocket} ->
-            case gen_tcp:send(ApiSocket, term_to_binary(Message)) of
+        {ok, Socket} ->
+            case gen_tcp:send(Socket, term_to_binary(Message)) of
                 ok ->
-                    case recv_response(ApiSocket) of
+                    case recv_response(Socket) of
                         {ok, Result} ->
-                            kai_connection:return(ApiSocket),
+                            kai_connection:return(Socket),
                             {ok, Result};
                         {error, Reason} ->
-                            kai_connection:close(ApiSocket),
+                            kai_connection:close(Socket),
                             {error, Reason}
                     end;
                 {error, Reason} ->
-                    kai_connection:close(ApiSocket),
+                    kai_connection:close(Socket),
                     {error, Reason}
             end;
         {error, Reason} ->
@@ -121,54 +128,56 @@ request(Node, Message) ->
             {error, Reason}
     end.
 
-is_local_node(Node) ->
-    LocalNode = kai_config:get(node),
-    Node =:= LocalNode.
+ok(DstNode, SrcNode) ->
+    case DstNode =:= SrcNode of
+        true -> ok;
+        _    -> request(DstNode, ok)
+    end.
 
-node_info(Node) ->
-    case is_local_node(Node) of
+node_info(DstNode, SrcNode) ->
+    case DstNode =:= SrcNode of
         true -> kai_config:node_info();
-        _    -> request(Node, node_info)
+        _    -> request(DstNode, node_info)
     end.
 
-node_list(Node) ->
-    case is_local_node(Node) of
+node_list(DstNode, SrcNode) ->
+    case DstNode =:= SrcNode of
         true -> kai_hash:node_list();
-        _    -> request(Node, node_list)
+        _    -> request(DstNode, node_list)
     end.
 
-list(Node, Bucket) ->
-    case is_local_node(Node) of
+list(DstNode, SrcNode, Bucket) ->
+    case DstNode =:= SrcNode of
         true -> kai_store:list(Bucket);
-        _    -> request(Node, {list, Bucket})
+        _    -> request(DstNode, {list, Bucket})
     end.
 
-get(Node, Data) ->
-    case is_local_node(Node) of
+get(DstNode, SrcNode, Data) ->
+    case DstNode =:= SrcNode of
         true -> kai_store:get(Data);
-        _    -> request(Node, {get, Data})
+        _    -> request(DstNode, {get, Data})
     end.
 
-put(Node, Data) ->
-    case is_local_node(Node) of
+put(DstNode, SrcNode, Data) ->
+    case DstNode =:= SrcNode of
         true -> kai_store:put(Data);
-        _    -> request(Node, {put, Data})
+        _    -> request(DstNode, {put, Data})
     end.
 
-delete(Node, Data) ->
-    case is_local_node(Node) of
+delete(DstNode, SrcNode, Data) ->
+    case DstNode =:= SrcNode of
         true -> kai_store:delete(Data);
-        _    -> request(Node, {delete, Data})
+        _    -> request(DstNode, {delete, Data})
     end.
 
-check_node(Node, Node2) ->
-    case is_local_node(Node) of
-        true -> kai_membership:check_node(Node2);
-        _    -> request(Node, {check_node, Node2})
+check_node(DstNode, SrcNode, Node) ->
+    case DstNode =:= SrcNode of
+        true -> kai_membership:check_node(Node);
+        _    -> request(DstNode, {check_node, Node})
     end.
 
-route(Node, Request) ->
-    case is_local_node(Node) of
+route(DstNode, SrcNode, Request) ->
+    case DstNode =:= SrcNode of
         true -> {error, ewouldblock};
-        _    -> request(Node, {route, Request})
+        _    -> request(DstNode, {route, DstNode, Request})
     end.

@@ -1,14 +1,14 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_tcp_server_sup).
 -behaviour(supervisor).
@@ -19,7 +19,7 @@
 
 -include("kai.hrl").
 
-% External APIs
+%% External APIs
 start_link(Name, Mod, Args, Option) ->
     supervisor:start_link(Name, ?MODULE, [Name, Mod, Args, Option]).
 
@@ -31,15 +31,15 @@ stop(Name) ->
         _ -> not_started
     end.
 
-% Callbacks
+%% Callbacks
 init([Name, Mod, Args, Option]) ->
     case Mod:init(Args) of 
         {ok, State}    -> listen(State, Name, Mod, Option);
         {stop, Reason} -> Reason;
-        Other          -> Other % 'ignore' is contained.
+        Other          -> Other %% Includes 'ignore'.
     end.
 
-% Internal Functions
+%% Internal Functions
 listen(State, Name, Mod, Option) ->
     case gen_tcp:listen(
         Option#tcp_server_option.port,

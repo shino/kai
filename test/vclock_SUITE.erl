@@ -13,39 +13,33 @@
 -module(vclock_SUITE).
 -compile(export_all).
 
+-include("ct.hrl").
 -include("kai.hrl").
 -include("kai_test.hrl").
 
-all() -> [test_desceds_in_single_node,
-          test_concurrent,
-          test_merge].
+sequences() ->
+    [{seq, [desceds_in_single_node, concurrent, merge]}].
 
-test_desceds_in_single_node() -> [].
+all() -> [{sequence, seq}].
 
 %% @doc Serves as both a trivial test and some example code.
-test_desceds_in_single_node(_Conf) ->
+desceds_in_single_node(_Conf) ->
     A1 = vclock:fresh(),
     A2 = vclock:increment(a, A1),
     ?assert(vclock:descends(A2,A1)),
     A3 = vclock:increment(a, A2),
     ?assert(vclock:descends(A3,A2)),
-    ?assert(vclock:descends(A3,A1)),
-    ok.
+    ?assert(vclock:descends(A3,A1)).
 
-test_concurrent() -> [].
-
-test_concurrent(_Conf) ->
+concurrent(_Conf) ->
     A1 = vclock:fresh(),
     B1 = vclock:fresh(),
     A2 = vclock:increment(a, A1),
     B2 = vclock:increment(b, B1),
     ?assertNot(vclock:descends(A2,B2)),
-    ?assertNot(vclock:descends(B2,A2)),
-    ok.
+    ?assertNot(vclock:descends(B2,A2)).
 
-test_merge() -> [].
-
-test_merge(_Conf) ->
+merge(_Conf) ->
     A1 = vclock:fresh(),
     B1 = vclock:fresh(),
     A2 = vclock:increment(a, A1),
@@ -63,5 +57,4 @@ test_merge(_Conf) ->
     ?assert(vclock:descends(C2, C1)),
 
     ?assertNot(vclock:descends(A2, C2)),
-    ?assertNot(vclock:descends(B2, C2)),
-    ok.
+    ?assertNot(vclock:descends(B2, C2)).

@@ -1,60 +1,29 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_coordinator).
 
--export([route/1]).
--export([start_route/3, map_in_get/4, map_in_put/4, map_in_delete/4]).
+-export([route/2]).
+-export([start_route/4, map_in_get/5, map_in_put/5, map_in_delete/5]).
 
 -include("kai.hrl").
 
 -define(SERVER, ?MODULE).
 
-dispatch({Type, Data} = _Request) ->
-    case Type of
-        get    -> coordinate_get(Data);
-        put    -> coordinate_put(Data);
-        delete -> coordinate_delete(Data);
-        _Other -> {error, ebadrpc}
-    end.
-
-do_route(_Request, []) ->
-    {error, ebusy};
-do_route({_Type, Data} = Request, [Node|RestNodes]) ->
-    % TODO: introduce TTL, in order to avoid infinite loop
-    case kai_rpc:route(Node, Request) of
-        {error, Reason} ->
-            ?warning(io_lib:format("do_route(~p, ~p): ~p",
-                                   [Data#data.key, Node, {error, Reason}])),
-            do_route(Request, RestNodes);
-        Results ->
-            Results
-    end.
-
-start_route({_Type, Data} = Request, Pid, Ref) ->
-    LocalNode = kai_config:get(node),
-    {nodes, Nodes} = kai_hash:find_nodes(Data#data.key),
-    Results =
-        case lists:member(LocalNode, Nodes) of
-            true -> dispatch(Request);
-            _    -> do_route(Request, Nodes)
-        end,
-    Pid ! {Ref, Results}.
-
-route({_Type, Data} = Request) ->
+route(SrcNode, {_Type, Data, _Quorum} = Request) ->
     Ref = make_ref(),
-    % Though don't know the reason, application exits abnormally if it doesn't
-    % spawn the process
-    spawn(?MODULE, start_route, [Request, self(), Ref]),
+    %% Application exits abnormally if it doesn't spawn the process, though 
+    %% the reason is unknown.
+    spawn(?MODULE, start_route, [SrcNode, Request, self(), Ref]),
     receive
         {Ref, Result} -> Result
     after ?TIMEOUT ->
@@ -62,16 +31,48 @@ route({_Type, Data} = Request) ->
             []
     end.
 
-coordinate_get(Data) ->
-    {bucket, Bucket} = kai_hash:find_bucket(Data#data.key),
-    {nodes,  Nodes } = kai_hash:find_nodes(Bucket),
+start_route(SrcNode, {_Type, Data, _Quorum} = Request, Pid, Ref) ->
+    {ok, DstNodes} = kai_hash:find_nodes(Data#data.key),
+    Results =
+        case lists:member(SrcNode, DstNodes) of
+            true -> dispatch(SrcNode, Request);
+            _    -> do_route(DstNodes, SrcNode, Request)
+        end,
+    Pid ! {Ref, Results}.
+
+dispatch(SrcNode, {Type, Data, Quorum} = _Request) ->
+    case Type of
+        get    -> coordinate_get(SrcNode, Data, Quorum);
+        put    -> coordinate_put(SrcNode, Data, Quorum);
+        delete -> coordinate_delete(SrcNode, Data, Quorum);
+        _Other -> {error, ebadrpc}
+    end.
+
+do_route([], _SrcNode, _Request) ->
+    {error, ebusy};
+do_route([DstNode|RestNodes], SrcNode, {_Type, Data, _Quorum} = Request) ->
+    %% TODO: introduce TTL, in order to avoid infinite loop
+    case kai_rpc:route(DstNode, SrcNode, Request) of
+        {error, Reason} ->
+            ?warning(io_lib:format("do_route(~p, ~p): ~p",
+                                   [DstNode, Data#data.key, {error, Reason}])),
+            do_route(RestNodes, SrcNode, Request);
+        Results ->
+            Results
+    end.
+
+coordinate_get(SrcNode, Data, {N,R,_W}) ->
+    {ok, Bucket} = kai_hash:find_bucket(Data#data.key),
+    {ok, DstNodes} = kai_hash:find_nodes(Bucket),
     Data2 = Data#data{bucket=Bucket},
     Ref = make_ref(),
     lists:foreach(
-      fun(Node) -> spawn(?MODULE, map_in_get, [Node, Data2, Ref, self()]) end, % Don't link
-      Nodes
+      fun(DstNode) ->
+              %% Don't link
+              spawn(?MODULE, map_in_get, [DstNode, SrcNode, Data2, Ref, self()])
+      end, 
+      DstNodes
      ),
-    [N, R] = kai_config:get([n, r]),
     case gather_in_get(Ref, N, R, []) of
         ListOfData when is_list(ListOfData) ->
             %% TODO: write back recent if multiple versions are found and they can be resolved
@@ -91,10 +92,10 @@ coordinate_get(Data) ->
             undefined
     end.
 
-map_in_get(Node, Data, Ref, Pid) ->
-    case kai_rpc:get(Node, Data) of
+map_in_get(DstNode, SrcNode, Data, Ref, Pid) ->
+    case kai_rpc:get(DstNode, SrcNode, Data) of
         {error, Reason} ->
-%            kai_membership:check_node(Node),
+%            kai_membership:check_node(DstNode),
             Pid ! {Ref, {error, Reason}};
         Other ->
             Pid ! {Ref, Other}
@@ -117,12 +118,12 @@ gather_in_get(Ref, N, R, Results) ->
             Results
     end.
 
-coordinate_put(Data) ->
+coordinate_put(SrcNode, Data, {N,_R,W}) ->
     Key   = Data#data.key,
     Flags = Data#data.flags,
     Value = Data#data.value,
-    {bucket, Bucket} = kai_hash:find_bucket(Key),
-    {nodes,  Nodes } = kai_hash:find_nodes(Bucket),
+    {ok, Bucket} = kai_hash:find_bucket(Key),
+    {ok, DstNodes} = kai_hash:find_nodes(Bucket),
     Ref = make_ref(),
     Data1 =
         case kai_store:get(Data#data{bucket=Bucket}) of
@@ -139,16 +140,17 @@ coordinate_put(Data) ->
         value    = Value
     },
     lists:foreach(
-      fun(Node) -> spawn(?MODULE, map_in_put, [Node, Data3, Ref, self()]) end,
-      Nodes
+      fun(DstNode) ->
+              spawn(?MODULE, map_in_put, [DstNode, SrcNode, Data3, Ref, self()])
+      end,
+      DstNodes
      ),
-    [N, W] = kai_config:get([n, w]),
     gather_in_put(Ref, N, W).
 
-map_in_put(Node, Data, Ref, Pid) ->
-    case kai_rpc:put(Node, Data) of
+map_in_put(DstNode, SrcNode, Data, Ref, Pid) ->
+    case kai_rpc:put(DstNode, SrcNode, Data) of
         {error, Reason} ->
-%            kai_membership:check_node(Node),
+%            kai_membership:check_node(DstNode),
             Pid ! {Ref, {error, Reason}};
         Other ->
             Pid ! {Ref, Other}
@@ -167,22 +169,23 @@ gather_in_put(Ref, N, W) ->
             {error, etimedout}
     end.
 
-coordinate_delete(Data) ->
-    {bucket, Bucket} = kai_hash:find_bucket(Data#data.key),
-    {nodes,  Nodes } = kai_hash:find_nodes(Bucket),
+coordinate_delete(SrcNode, Data, {N,_R,W}) ->
+    {ok, Bucket} = kai_hash:find_bucket(Data#data.key),
+    {ok, DstNodes} = kai_hash:find_nodes(Bucket),
     Data2 = Data#data{bucket=Bucket},
     Ref = make_ref(),
     lists:foreach(
-      fun(Node) -> spawn(?MODULE, map_in_delete, [Node, Data2, Ref, self()]) end,
-      Nodes
+      fun(DstNode) ->
+              spawn(?MODULE, map_in_delete, [DstNode, SrcNode, Data2, Ref, self()])
+      end,
+      DstNodes
      ),
-    [N, W] = kai_config:get([n, w]),
     gather_in_delete(Ref, N, W, []).
 
-map_in_delete(Node, Data, Ref, Pid) ->
-    case kai_rpc:delete(Node, Data) of
+map_in_delete(DstNode, SrcNode, Data, Ref, Pid) ->
+    case kai_rpc:delete(DstNode, SrcNode, Data) of
         {error, Reason} ->
-%            kai_membership:check_node(Node),
+%            kai_membership:check_node(DstNode),
             Pid ! {Ref, {error, Reason}};
         Other ->
             Pid ! {Ref, Other}

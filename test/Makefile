@@ -25,10 +25,10 @@ ERL_COMPILE_FLAGS += +warn_unused_vars +nowarn_shadow_vars +warn_unused_import
 .yrl.erl:
 	erlc -W $(ERL_COMPILE_FLAGS) -I$(INCLUDE) $<
 
-MODS = kai_config_SUITE kai_log_SUITE kai_hash_SUITE kai_store_SUITE \
-	kai_stat_SUITE kai_version_SUITE kai_connection_SUITE kai_sync_SUITE \
-	kai_membership_SUITE kai_coordinator_SUITE kai_tcp_server_SUITE \
-	kai_rpc_SUITE kai_memcache_SUITE vclock_SUITE
+MODS = vclock_SUITE kai_config_SUITE kai_log_SUITE kai_hash_SUITE \
+	kai_version_SUITE kai_store_SUITE kai_stat_SUITE kai_connection_SUITE \
+	kai_tcp_server_SUITE kai_rpc_SUITE kai_sync_SUITE \
+	kai_membership_SUITE kai_coordinator_SUITE kai_memcache_SUITE
 
 all: compile
 

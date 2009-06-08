@@ -1,14 +1,14 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_memcache_SUITE).
 -compile(export_all).
@@ -17,148 +17,147 @@
 -include("kai.hrl").
 -include("kai_test.hrl").
 
-all() -> [test1].
+sequences() -> [{seq, [standalone, cluster, stats, version, no_such_command]}].
 
-test1() -> [].
-test1(_Conf) ->
-    kai_config:start_link([
-        {hostname, "localhost"},
-        {rpc_port, 11011},
-        {rpc_max_processes, 2},
-        {memcache_port, 11211},
-        {memcache_max_processes, 2},
-        {max_connections, 32},
-        {n, 1}, {r, 1}, {w, 1},
-        {number_of_buckets, 8},
-        {number_of_virtual_nodes, 2},
-        {store, ets}
-    ]),
-    kai_hash:start_link(),
-    kai_store:start_link(),
-    kai_stat:start_link(),
-    kai_version:start_link(),
-    kai_connection:start_link(),
-    kai_rpc:start_link(),
-    kai_memcache:start_link(),
+all() -> [{sequence, seq}].
 
-    timer:sleep(100), % wait for starting kai_memcache
+init_per_testcase(standalone, Conf) ->
+    init_node(Conf, 1, [{quorum, {1,1,1}}]);
+init_per_testcase(_TestCase, Conf) ->
+    Conf2 = init_node(Conf,  1, [{quorum, {2,2,2}}]),
+    Conf3 = init_node(Conf2, 2, [{quorum, {2,2,2}}]),
+    Conf4 = init_node(Conf3, 3, [{quorum, {2,2,2}}]),
+    [Node1, Node2, Node3] =
+        [?config(node1, Conf4), ?config(node2, Conf4), ?config(node3, Conf4)],
+    rpc:call(Node1, kai_membership, check_node, [?NODE2]),
+    rpc:call(Node2, kai_membership, check_node, [?NODE3]),
+    rpc:call(Node3, kai_membership, check_node, [?NODE1]),
+    Interval = rpc:call(Node1, kai_config, get, [membership_interval]),
+    timer:sleep(Interval),
+    wait(),
+    Conf4.
 
-    {ok, MemcacheSocket} =
+end_per_testcase(standalone, Conf) ->
+    end_node(Conf, 1);
+end_per_testcase(_TestCase, Conf) ->
+    end_node(Conf, 1),
+    end_node(Conf, 2),
+    end_node(Conf, 3).
+
+standalone(_Conf) ->
+    crud().
+
+cluster(_Conf) ->
+    crud().
+
+crud() ->
+    Socket = connect(),
+
+    Value = <<"value1">>,
+    Buf = io_lib:format("set key1 0 0 ~w\r\n~s\r\n", [byte_size(Value), Value]),
+    gen_tcp:send(Socket, Buf),
+
+    {ok, <<"STORED\r\n">>} = gen_tcp:recv(Socket, 0),
+
+    gen_tcp:send(Socket, "get key1\r\n"),
+
+    {ok, <<"VALUE key1 0 6\r\n">>} = gen_tcp:recv(Socket, 0),
+    inet:setopts(Socket, [{packet, raw}]),
+    {ok, <<"value1\r\n">>} = gen_tcp:recv(Socket, 6+2),
+    inet:setopts(Socket, [{packet, line}]),
+    {ok, <<"END\r\n">>} = gen_tcp:recv(Socket, 0),
+
+    gen_tcp:send(Socket, "delete key1\r\n"),
+    {ok, <<"DELETED\r\n">>} = gen_tcp:recv(Socket, 0),
+
+    gen_tcp:send(Socket, "delete key1 0\r\n"),
+    {ok, <<"NOT_FOUND\r\n">>} = gen_tcp:recv(Socket, 0),
+
+    gen_tcp:send(Socket, "get key1\r\n"),
+    {ok, <<"END\r\n">>} = gen_tcp:recv(Socket, 0),
+
+    close(Socket).
+
+stats(_Conf) ->
+    Socket = connect(),
+
+    Value = <<"value1">>,
+    Buf = io_lib:format("set key1 0 0 ~w\r\n~s\r\n", [byte_size(Value), Value]),
+    gen_tcp:send(Socket, Buf),
+
+    {ok, <<"STORED\r\n">>} = gen_tcp:recv(Socket, 0),
+
+    gen_tcp:send(Socket, "get key1\r\n"),
+
+    {ok, <<"VALUE key1 0 6\r\n">>} = gen_tcp:recv(Socket, 0),
+    inet:setopts(Socket, [{packet, raw}]),
+    {ok, <<"value1\r\n">>} = gen_tcp:recv(Socket, 6+2),
+    inet:setopts(Socket, [{packet, line}]),
+    {ok, <<"END\r\n">>} = gen_tcp:recv(Socket, 0),
+
+    gen_tcp:send(Socket, "stats\r\n"),
+    Stats = recv_stats(Socket, []),
+
+    ?assert(re(g(uptime, Stats), "[0-9]+")),
+    ?assert(re(g(time, Stats), "[0-9]+")),
+    ?assert(re(g(version, Stats), "[.0-9]+")),
+    ?assert(re(g(bytes, Stats), "[0-9]+")),
+
+    ?assertEqual("1", g(curr_items, Stats)),
+    ?assertEqual("1", g(curr_connections, Stats)),
+    ?assertEqual("1", g(cmd_get, Stats)),
+    ?assertEqual("1", g(cmd_set, Stats)),
+    ?assertEqual("6", g(bytes_read, Stats)),
+    ?assertEqual("6", g(bytes_write, Stats)),
+
+    ?assertEqual("127.0.0.1:11011", g(kai_node, Stats)),
+    ?assertEqual("2,2,2", g(kai_quorum, Stats)),
+    ?assertEqual("4", g(kai_buckets, Stats)),
+    ?assertEqual("2", g(kai_virtual_nodes, Stats)),
+    ?assertEqual("ets", g(kai_store, Stats)),
+    ?assertEqual("127.0.0.1:11011 127.0.0.1:11012 127.0.0.1:11013", g(kai_curr_nodes, Stats)),
+    ?assertEqual("0(0)", g(kai_unreconciled_get, Stats)),
+%    ?assertEqual("0 1 2 3", g(kai_curr_buckets, Stats)),
+    
+    ?assert(re(g(erlang_procs, Stats), "[0-9]+")),
+    ?assert(re(g(erlang_version, Stats), "[.0-9]+")),
+
+    close(Socket).
+
+recv_stats(Socket, Stats) ->
+    {ok, Data} = gen_tcp:recv(Socket, 0),
+    case Data of
+        <<"STAT", _/binary>> ->
+            ["STAT", Name|Values] =
+                string:tokens(binary_to_list(Data), " \r\n"),
+            Stats2 = [{list_to_atom(Name), string:join(Values, " ")} | Stats],
+            recv_stats(Socket, Stats2);
+        <<"END", _/binary>> ->
+            Stats
+    end.
+
+version(_Conf) ->
+    Socket = connect(),
+
+    gen_tcp:send(Socket, "version\r\n"),
+
+    {ok, Data} = gen_tcp:recv(Socket, 0),
+    ["VERSION", Version] = string:tokens(binary_to_list(Data), " \r\n"),
+    ?assert(re(Version, "[.0-9]+")),
+
+    close(Socket).
+
+no_such_command(_Conf) ->
+    Socket = connect(),
+
+    gen_tcp:send(Socket, "no_such_command\r\n"),
+    {ok, <<"ERROR\r\n">>} = gen_tcp:recv(Socket, 0).
+
+connect() ->
+    {ok, Socket} =
         gen_tcp:connect({127,0,0,1}, 11211, [binary, {packet, line}, {active, false}]),
+    Socket.
 
-    Value = <<"value-1">>,
-    Buf = io_lib:format("set item-1 0 0 ~w\r\n~s\r\n", [byte_size(Value), Value]),
-    gen_tcp:send(MemcacheSocket, Buf),
-
-    ?assertEqual(
-       {ok, <<"STORED\r\n">>},
-       gen_tcp:recv(MemcacheSocket, 0)
-      ),
-
-    gen_tcp:send(MemcacheSocket, "get item-1\r\n"),
-
-    ?assertEqual(
-       {ok, <<"VALUE item-1 0 7\r\n">>},
-       gen_tcp:recv(MemcacheSocket, 0)
-      ),
-    inet:setopts(MemcacheSocket, [{packet, raw}]),
-    ?assertEqual(
-       {ok, <<"value-1">>},
-       gen_tcp:recv(MemcacheSocket, byte_size(<<"value-1">>))
-      ),
-    inet:setopts(MemcacheSocket, [{packet, line}]),
-    ?assertEqual(
-       {ok, <<"\r\n">>},
-       gen_tcp:recv(MemcacheSocket, 0)
-      ),
-    ?assertEqual(
-       {ok, <<"END\r\n">>},
-       gen_tcp:recv(MemcacheSocket, 0)
-      ),
-
-    gen_tcp:send(MemcacheSocket, "delete item-1\r\n"),
-    ?assertEqual(
-       {ok, <<"DELETED\r\n">>},
-       gen_tcp:recv(MemcacheSocket, 0)
-      ),
-
-    gen_tcp:send(MemcacheSocket, "delete item-2 0\r\n"),
-    ?assertEqual(
-       {ok, <<"NOT_FOUND\r\n">>},
-       gen_tcp:recv(MemcacheSocket, 0)
-      ),
-
-    gen_tcp:send(MemcacheSocket, "get item-1\r\n"),
-    ?assertEqual(
-       {ok, <<"END\r\n">>},
-       gen_tcp:recv(MemcacheSocket, 0)
-      ),
-
-    gen_tcp:send(MemcacheSocket, "no_such_command\r\n"),
-    ?assertEqual(
-       {ok, <<"ERROR\r\n">>},
-       gen_tcp:recv(MemcacheSocket, 0)
-      ),
-
-    gen_tcp:send(MemcacheSocket, "stats\r\n"),
-    {ok, Uptime              } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, Time                } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, Version             } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, Bytes               } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, CurrItems           } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, CurrConnections     } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, CmdGet              } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, CmdSet              } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, BytesRead           } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, BytesWrite          } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, LocalNode           } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, Quorum              } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, NumberOfBuckets     } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, NumberOfVirtualNodes} = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, Store               } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, Nodes               } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, UnreconciledGet     } = gen_tcp:recv(MemcacheSocket, 0),
-%    {ok, Buckets             } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, ErlangProcs         } = gen_tcp:recv(MemcacheSocket, 0),
-    {ok, ErlangVersion       } = gen_tcp:recv(MemcacheSocket, 0),
-    {match, _S1, _L1} = regexp:match(binary_to_list(Uptime),               "uptime"),
-    {match, _S2, _L2} = regexp:match(binary_to_list(Time),                 "time"),
-    {match, _S3, _L3} = regexp:match(binary_to_list(Version),              "version"),
-    {match, _S4, _L4} = regexp:match(binary_to_list(Bytes),                "bytes"),
-    {match, _S5, _L5} = regexp:match(binary_to_list(CurrItems),            "curr_items"),
-    {match, _S6, _L6} = regexp:match(binary_to_list(CurrConnections),            "curr_connections"),
-    {match, _S7, _L7} = regexp:match(binary_to_list(CmdGet),               "cmd_get"),
-    {match, _S8, _L8} = regexp:match(binary_to_list(CmdSet),               "cmd_set"),
-    {match, _S9, _L9} = regexp:match(binary_to_list(BytesRead),            "bytes_read"),
-    {match, _S0, _L0} = regexp:match(binary_to_list(BytesWrite),           "bytes_write"),
-    {match, _Sa, _La} = regexp:match(binary_to_list(LocalNode),            "kai_node"),
-    {match, _Sb, _Lb} = regexp:match(binary_to_list(Quorum),               "kai_quorum"),
-    {match, _Sc, _Lc} = regexp:match(binary_to_list(NumberOfBuckets),      "kai_number_of_buckets"),
-    {match, _Sd, _Ld} = regexp:match(binary_to_list(NumberOfVirtualNodes), "kai_number_of_virtual_nodes"),
-    {match, _Se, _Le} = regexp:match(binary_to_list(Store),                "kai_store"),
-    {match, _Sf, _Lf} = regexp:match(binary_to_list(Nodes),                "kai_curr_nodes"),
-    {match, _Sk, _Lk} = regexp:match(binary_to_list(UnreconciledGet),      "kai_unreconciled_get"),
-%    {match, _Sg, _Lg} = regexp:match(binary_to_list(Buckets),              "kai_curr_buckets"),
-    {match, _Sh, _Lh} = regexp:match(binary_to_list(ErlangProcs),          "erlang_procs"),
-    {match, _Si, _Li} = regexp:match(binary_to_list(ErlangVersion),        "erlang_version"),
-    ?assertEqual(
-       {ok, <<"END\r\n">>},
-       gen_tcp:recv(MemcacheSocket, 0)
-      ),
-
-    gen_tcp:send(MemcacheSocket, "version\r\n"),
-    {ok, Version2} = gen_tcp:recv(MemcacheSocket, 0),
-    {match, _Sj, _Lj} = regexp:match(binary_to_list(Version2), "VERSION "),
-
-    gen_tcp:send(MemcacheSocket, "quit\r\n"),
-
-    gen_tcp:close(MemcacheSocket),
-
-    kai_memcache:stop(),
-    kai_rpc:stop(),
-    kai_connection:stop(),
-    kai_version:stop(),
-    kai_stat:stop(),
-    kai_store:stop(),
-    kai_hash:stop(),
-    kai_config:stop().
+close(Socket) ->
+    gen_tcp:send(Socket, "quit\r\n"),
+    gen_tcp:close(Socket).

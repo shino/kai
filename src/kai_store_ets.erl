@@ -1,14 +1,14 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_store_ets).
 -behaviour(gen_server).
@@ -50,8 +50,8 @@ do_list(Bucket, State) ->
         vector_clocks = '$3',
         checksum      = '$4'
     }}],
-    ListOfData = ets:select(?MODULE, [{Head, Cond, Body}]),
-    {reply, {list_of_data, ListOfData}, State}.
+    KeyList = ets:select(?MODULE, [{Head, Cond, Body}]),
+    {reply, {ok, KeyList}, State}.
 
 do_get(#data{key=Key} = _Data, State) ->
     case ets:lookup(?MODULE, Key) of
@@ -67,8 +67,7 @@ do_put(Data, State) when is_record(Data, data) ->
                 _ -> {reply, {error, "stale or concurrent state found in kai_store"}, State}
             end;
         _ -> insert_and_reply(Data, State)
-    end;
-do_put(a, b) -> ok.
+    end.
 
 insert_and_reply(Data, State) ->
     ets:insert(?MODULE, Data),
@@ -87,13 +86,15 @@ info(Name, State) ->
     Value =
         case Name of
             bytes ->
-                % this code roughly estimates the size of stored objects,
-                % since ets only store a reference to the binary
-                Ets = erlang:system_info(wordsize) + ets:info(?MODULE, memory),
+                %% This code roughly estimates the size of stored objects,
+                %% since ets only store a reference to the binary
+                Ets = erlang:system_info(wordsize) * ets:info(?MODULE, memory),
                 Bin = erlang:memory(binary),
                 Ets + Bin;
             size ->
-                ets:info(?MODULE, size)
+                ets:info(?MODULE, size);
+            _ ->
+                undefined
         end,
     {reply, Value, State}.
 

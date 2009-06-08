@@ -1,14 +1,14 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_connection).
 -behaviour(gen_server).
@@ -24,16 +24,32 @@
 
 -define(SERVER, ?MODULE).
 
+-record(state, {connections, max_connections}).
 -record(connection, {node, available, socket}).
 
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], _Opts = []).
 
 init(_Args) ->
-    {ok, []}.
+    {ok, #state{
+       connections     = [],
+       max_connections = kai_config:get(max_connections)
+      }}.
 
 terminate(_Reason, _State) ->
     ok.
+
+lease(Node, Pid, Opts, State) ->
+    case do_lease(Node, Pid, Opts, State#state.connections, []) of
+        {ok, Socket, Conns} ->
+            {reply, {ok, Socket}, State#state{
+                                    connections = lru(Conns, State)
+                                   }};
+        {error, Reason, _Conns} ->
+            ?warning(io_lib:format("lease(~p, ~p) ~p",
+                                   [Node, Pid, {error, Reason}])),
+            {reply, {error, Reason}, State}
+    end.
 
 do_lease({Address, Port} = Node, Pid, Opts, [], Acc) ->
     case gen_tcp:connect(
@@ -45,13 +61,13 @@ do_lease({Address, Port} = Node, Pid, Opts, [], Acc) ->
             case gen_tcp:controlling_process(Socket, Pid) of
                 ok ->
                     ok = inet:setopts(Socket, Opts),
-                    Connection = #connection{
+                    Conn = #connection{
                         node      = Node,
                         available = false,
                         socket    = Socket
                     },
-                    Connections = [Connection|lists:reverse(Acc)], % LRU
-                    {ok, Socket, Connections};
+                    Conns = [Conn|lists:reverse(Acc)], %% LRU
+                    {ok, Socket, Conns};
                 {error, Reason} ->
                     {error, Reason, Acc}
             end;
@@ -62,31 +78,64 @@ do_lease(Node, Pid, Opts, [#connection{node=Node, available=true, socket=Socket}
     case gen_tcp:controlling_process(Socket, Pid) of
         ok ->
             ok = inet:setopts(Socket, Opts),
-            Connection = #connection{
+            Conn = #connection{
                 node      = Node,
                 available = false,
                 socket    = Socket
             },
-            Connections = [Connection|lists:reverse(Acc)] ++ Rest, % LRU
+            Conns = [Conn|lists:reverse(Acc)] ++ Rest, %% LRU
             flush(Socket),
-            {ok, Socket, Connections};
+            {ok, Socket, Conns};
         {error, Reason} ->
-            Connections = Acc ++ Rest,
-            {error, Reason, Connections}
+            Conns = Acc ++ Rest,
+            {error, Reason, Conns}
     end;
 do_lease(Node, Pid, Opts, [C|Rest], Acc) ->
     do_lease(Node, Pid, Opts, Rest, [C|Acc]).
 
-lease(Node, Pid, Opts, Connections) ->
-    case do_lease(Node, Pid, Opts, Connections, []) of
-        {ok, Socket, Connections2} ->
-            Connections3 = lru(Connections2),
-            {reply, {ok, Socket}, Connections3};
-        {error, Reason, Connections2} ->
-            ?warning(io_lib:format("lease(~p, ~p) ~p",
-                                   [Node, Pid, {error, Reason}])),
-            {reply, {error, Reason}, Connections2}
+return(Socket, State) ->
+    case do_return(Socket, State#state.connections, []) of
+        {ok, Conns} ->
+            {reply, ok, State#state{
+                          connections = lru(Conns, State)
+                          }};
+        {error, Reason, _Conns} ->
+            ?warning(io_lib:format("return(~p) ~p",
+                                   [Socket, {error, Reason}])),
+            {reply, {error, Reason}, State}
     end.
+
+do_return(_Socket, [], Acc) ->
+    {error, enoent, Acc};
+do_return(Socket, [#connection{node=Node, available=_, socket=Socket}|Rest], Acc) ->
+    Conn = #connection{
+        node      = Node,
+        available = true,
+        socket    = Socket
+    },
+    Conns = [Conn|lists:reverse(Acc)] ++ Rest, %% LRU
+    {ok, Conns};
+do_return(Socket, [C|Rest], Acc) ->
+    do_return(Socket, Rest, [C|Acc]).
+
+close(Socket, State) ->
+    case do_close(Socket, State#state.connections, []) of
+        {ok, Conns} ->
+            {reply, ok, State#state{connections = Conns}};
+        {error, Reason, _Conns} ->
+            {reply, {error, Reason}, State}
+    end.
+
+do_close(_Socket, [], Acc) ->
+    {error, enoent, Acc};
+do_close(Socket, [#connection{node=_, available=_, socket=Socket}|Rest], Acc) ->
+    gen_tcp:close(Socket),
+    {ok, lists:reverse(Acc) ++ Rest};
+do_close(Socket, [C|Rest], Acc) ->
+    do_close(Socket, Rest, [C|Acc]).
+
+connections(State) ->
+    {reply, {ok, State#state.connections}, State}.
 
 flush(Socket) ->
     receive
@@ -101,62 +150,18 @@ lru(_N, [], Acc) ->
 lru(N, [#connection{node=_, available=true, socket=Socket}|Rest], Acc) ->
     gen_tcp:close(Socket),
     lru(N-1, Rest, Acc);
-lru(N, [#connection{node=_, available=false, socket=_} = C|Rest], Acc) ->
-    lru(N, Rest, [C|Acc]).
+lru(N, [#connection{node=_, available=false, socket=_} = Conn|Rest], Acc) ->
+    lru(N, Rest, [Conn|Acc]).
 
-lru(Connections) ->
-    MaxConnections = kai_config:get(max_connections),
-    Len = length(Connections),
+lru(Conns, State) ->
+    MaxConns = State#state.max_connections,
+    Len = length(Conns),
     if
-        Len > MaxConnections ->
-            lru(Len - MaxConnections, lists:reverse(Connections), []);
+        Len > MaxConns ->
+            lru(Len - MaxConns, lists:reverse(Conns), []);
         true ->
-            Connections
+            Conns
     end.
-
-do_return(_Socket, [], Acc) ->
-    {error, enoent, Acc};
-do_return(Socket, [#connection{node=Node, available=_, socket=Socket}|Rest], Acc) ->
-    Connection = #connection{
-        node      = Node,
-        available = true,
-        socket    = Socket
-    },
-    Connections = [Connection|lists:reverse(Acc)] ++ Rest, % LRU
-    {ok, Connections};
-do_return(Socket, [C|Rest], Acc) ->
-    do_return(Socket, Rest, [C|Acc]).
-
-return(Socket, Connections) ->
-    case do_return(Socket, Connections, []) of
-        {ok, Connections2} ->
-            Connections3 = lru(Connections2),
-            {reply, ok, Connections3};
-        {error, Reason, Connections2} ->
-            ?warning(io_lib:format("return(~p) ~p",
-                                   [Socket, {error, Reason}])),
-            {reply, {error, Reason}, Connections2}
-    end.
-
-
-do_close(_Socket, [], Acc) ->
-    {error, enoent, Acc};
-do_close(Socket, [#connection{node=_, available=_, socket=Socket}|Rest], Acc) ->
-    gen_tcp:close(Socket),
-    {ok, lists:reverse(Acc) ++ Rest};
-do_close(Socket, [C|Rest], Acc) ->
-    do_close(Socket, Rest, [C|Acc]).
-
-close(Socket, Connections) ->
-    case do_close(Socket, Connections, []) of
-        {ok, Connections2} ->
-            {reply, ok, Connections2};
-        {error, Reason, Connections2} ->
-            {reply, {error, Reason}, Connections2}
-    end.
-
-connections(Connections) ->
-    {reply, {ok, Connections}, Connections}.
 
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State};

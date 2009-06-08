@@ -18,6 +18,8 @@
 
 -include("kai.hrl").
 
+-record(state, {node, quorum}).
+
 -define(MEMCACHE_TIMEOUT, ?TIMEOUT).
 
 start_link() ->
@@ -33,7 +35,11 @@ start_link() ->
 
 stop() -> kai_tcp_server:stop(?MODULE).
 
-init(_Args) -> {ok, {}}.
+init(_Args) ->
+    {ok, #state{
+       node   = kai_config:get(node),
+       quorum = kai_config:get(quorum)
+      }}.
 
 handle_call(Socket, Data, State) ->
     dispatch(Socket, string:tokens(binary_to_list(Data), " \r\n"), State).
@@ -53,7 +59,10 @@ dispatch(_Socket, ["set", _Key, _Flags, _Exptime, _Bytes], State) ->
     {reply, <<"CLIENT_ERROR Exptime must be zero.\r\n">>, State};
 
 dispatch(_Socket, ["delete", Key], State) ->
-    case kai_coordinator:route({delete, #data{key=Key}}) of
+    case kai_coordinator:route(
+           State#state.node,
+           {delete, #data{key = Key}, State#state.quorum}
+          ) of
         ok        -> {reply, <<"DELETED\r\n">>, State};
         undefined -> {reply, <<"NOT_FOUND\r\n">>, State};
         _Other    ->
@@ -86,13 +95,17 @@ dispatch(_Socket, ["version"], State) ->
         end,
     {reply, "VERSION " ++ Version ++ "\r\n", State};
 
-dispatch(_Socket, ["quit"], _State) -> quit;
+dispatch(_Socket, ["quit"], State) ->
+    {close, State};
 
 dispatch(_Socket, _Unknown, State) ->
     {reply, <<"ERROR\r\n">>, State}.
 
 do_get(Key, State, WithCasUnique) ->
-    case kai_coordinator:route({get, #data{key=Key}}) of
+    case kai_coordinator:route(
+           State#state.node,
+           {get, #data{key = Key}, State#state.quorum}
+          ) of
         Data when is_list(Data) ->
             {ok, CasUniqueInBinary} = kai_version:cas_unique(Data),
             Response = get_response(Data, WithCasUnique, CasUniqueInBinary),
@@ -126,7 +139,8 @@ recv_set_data(Socket, ["set", Key, Flags, "0", Bytes], State) ->
         {ok, Value} ->
             gen_tcp:recv(Socket, 2, ?MEMCACHE_TIMEOUT),
             case kai_coordinator:route(
-                {put, #data{key=Key, flags=Flags, value=Value}}
+                   State#state.node,
+                   {put, #data{key = Key, flags = Flags, value = Value}, State#state.quorum}
             ) of
                 ok ->
                     gen_tcp:send(Socket, <<"STORED\r\n">>),

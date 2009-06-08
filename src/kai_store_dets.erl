@@ -1,14 +1,14 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_store_dets).
 -behaviour(gen_server).
@@ -20,15 +20,15 @@
 ]).
 
 -include("kai.hrl").
--record(state, {number_of_tables, tables}).
+
+-record(state, {tables, table_list}).
 
 start_link(Server) ->
     gen_server:start_link({local, Server}, ?MODULE, [], _Opts = []).
 
 init(_Args) ->
-    Dir = kai_config:get(dets_dir),
-    NumberOfTables = kai_config:get(number_of_tables),
-    Tables =
+    [Dir, TableNum] =kai_config:get([dets_dir, dets_tables]),
+    TableList =
         lists:map(
           fun(I) ->
                   Name = list_to_atom(atom_to_list(?MODULE) ++ "_" ++ integer_to_list(I)),
@@ -39,20 +39,20 @@ init(_Args) ->
                                          exit(Reason)
                   end
           end,
-          lists:seq(1, NumberOfTables)
+          lists:seq(1, TableNum)
          ),
-    {ok, #state{number_of_tables = NumberOfTables, tables = Tables}}.
+    {ok, #state{tables = TableNum, table_list = TableList}}.
 
 terminate(_Reason, State) ->
     lists:foreach(
       fun({_I, Table}) -> dets:close(Table) end,
-      State#state.tables
+      State#state.table_list
      ),
     ok.
 
 bucket_to_table(Bucket, State) ->
-    I = Bucket rem State#state.number_of_tables + 1,
-    proplists:get_value(I, State#state.tables).
+    I = Bucket rem State#state.tables + 1,
+    proplists:get_value(I, State#state.table_list).
 
 do_list(Bucket, State) ->
     Table = bucket_to_table(Bucket, State),
@@ -73,8 +73,8 @@ do_list(Bucket, State) ->
         vector_clocks = '$3',
         checksum      = '$4'
     }}],
-    ListOfData = dets:select(Table, [{Head, Cond, Body}]),
-    {reply, {list_of_data, ListOfData}, State}.
+    KeyList = dets:select(Table, [{Head, Cond, Body}]),
+    {reply, {ok, KeyList}, State}.
 
 do_get(#data{key=Key, bucket=Bucket} = _Data, State) ->
     Table = bucket_to_table(Bucket, State),
@@ -114,13 +114,14 @@ info(Name, State) ->
     Values =
         lists:map(
           fun(I) ->
-                  T = proplists:get_value(I, State#state.tables),
+                  T = proplists:get_value(I, State#state.table_list),
                   case Name of
                       bytes -> dets:info(T, file_size);
-                      size  -> dets:info(T, size)
+                      size  -> dets:info(T, size);
+                      _     -> undefined
                   end
           end,
-          lists:seq(1, State#state.number_of_tables)
+          lists:seq(1, State#state.tables)
          ),
     {reply, lists:sum(Values), State}.
 

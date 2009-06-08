@@ -1,21 +1,21 @@
-% Licensed under the Apache License, Version 2.0 (the "License"); you may not
-% use this file except in compliance with the License.  You may obtain a copy of
-% the License at
-%
-%   http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
-% License for the specific language governing permissions and limitations under
-% the License.
+%% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+%% use this file except in compliance with the License.  You may obtain a copy of
+%% the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+%% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+%% License for the specific language governing permissions and limitations under
+%% the License.
 
 -module(kai_hash).
 -behaviour(gen_server).
 
 -export([start_link/0, stop/0]).
 -export([
-    update_nodes/2, find_bucket/1, find_replica/1, find_nodes/1,
+    update_nodes/2, find_bucket/1, find_nodes/1, replica_index/1,
     choose_node_randomly/0, choose_bucket_randomly/0,
     node_info/1, node_info/0, node_list/0, virtual_node_list/0, 
     bucket_list/0, buckets/0
@@ -38,7 +38,7 @@ init(_Args) ->
     ets:new(virtual_node_list, [ordered_set, private, named_table]),
     ets:new(buckets, [set, private, named_table]),
 
-    {node_info, LocalNode, Info} = kai_config:node_info(),
+    {ok, LocalNode, Info} = kai_config:node_info(),
     update_nodes([{LocalNode, Info}], [], _State = []),
 
     {ok, _State = []}.
@@ -57,11 +57,11 @@ hash({{N1,N2,N3,N4}, Port}, VirtualNode) ->
         erlang:md5(<<N1,N2,N3,N4,Port:16,VirtualNode:16>>),
     HashedKey.
 
-bucket_range(NumberOfBuckets) ->
-    trunc( math:pow(2, ?HASH_LEN) / NumberOfBuckets ).
+bucket_range(BucketNum) ->
+    trunc( math:pow(2, ?HASH_LEN) / BucketNum ).
 
 search_bucket_nodes(_HashedKey, _N, 0, Nodes) ->
-    {nodes, lists:reverse(Nodes)};
+    {ok, lists:reverse(Nodes)};
 search_bucket_nodes(HashedKey, N, I, Nodes) ->
     HashedNode =
         case ets:next(virtual_node_list, HashedKey) of
@@ -75,7 +75,7 @@ search_bucket_nodes(HashedKey, N, I, Nodes) ->
             _    -> [Node|Nodes]
         end,
     case length(Nodes2) of
-        N -> {nodes, lists:reverse(Nodes2)};
+        N -> {ok, lists:reverse(Nodes2)};
         _ -> search_bucket_nodes(HashedNode, N, I-1, Nodes2)
     end.
 
@@ -91,10 +91,10 @@ lists_index(Elem, List) ->
 
 update_buckets(-1 = _Bucket, _LocalNode, _BucketRange, _N, _MaxSearch,
                ReplacedBuckets) ->
-    {replaced_buckets, ReplacedBuckets};
+    {ok, ReplacedBuckets};
 update_buckets(Bucket, LocalNode, BucketRange, N, MaxSearch,
                ReplacedBuckets) ->
-    {nodes, NewNodes} =
+    {ok, NewNodes} =
         search_bucket_nodes(Bucket * BucketRange, N, MaxSearch, []),
     case ets:lookup(buckets, Bucket) of
         [{Bucket, NewNodes}] ->
@@ -120,20 +120,20 @@ update_buckets(Bucket, LocalNode, BucketRange, N, MaxSearch,
     end.
 
 update_buckets() ->
-    [LocalNode, N, NumberOfBuckets] =
-        kai_config:get([node, n, number_of_buckets]),
-    BucketRange = bucket_range(NumberOfBuckets),
-    NumberOfNodes = proplists:get_value(size, ets:info(node_list)),
+    [LocalNode, {N,_R,_W}, BucketNum] =
+        kai_config:get([node, quorum, buckets]),
+    BucketRange = bucket_range(BucketNum),
+    NodeNum = proplists:get_value(size, ets:info(node_list)),
 
-    % Don't search other nodes to fill a bucket when NumberOfNodes is 1, since
-    % they are never found.
+    %% Don't search other nodes to fill a bucket when NodeNum is 1, since
+    %% they are never found.
     MaxSearch =
-        case NumberOfNodes of
+        case NodeNum of
             1 -> 1;
             _ -> proplists:get_value(size, ets:info(virtual_node_list))
         end,
 
-    update_buckets(NumberOfBuckets-1, LocalNode, BucketRange, N, MaxSearch, []).
+    update_buckets(BucketNum-1, LocalNode, BucketRange, N, MaxSearch, []).
 
 add_nodes([]) ->
     ok;
@@ -142,14 +142,13 @@ add_nodes([{Node, Info}|Rest]) ->
         [{Node, _Info}|_] -> ok;
         [] ->
             ets:insert(node_list, {Node, Info}),
-            NumberOfVirtualNodes =
-                proplists:get_value(number_of_virtual_nodes, Info),
+            VirtualNodeNum = proplists:get_value(virtual_nodes, Info),
             lists:foreach(
               fun(VirtualNode) ->
                       HashedKey = hash(Node, VirtualNode),
                       ets:insert(virtual_node_list, {HashedKey, Node})
               end,
-              lists:seq(1, NumberOfVirtualNodes)
+              lists:seq(1, VirtualNodeNum)
              )
     end,
     add_nodes(Rest).
@@ -160,14 +159,13 @@ remove_nodes([Node|Rest]) ->
     case ets:lookup(node_list, Node) of
         [{Node, Info}|_] ->
             ets:delete(node_list, Node),
-            NumberOfVirtualNodes =
-                proplists:get_value(number_of_virtual_nodes, Info),
+            VirtualNodeNum = proplists:get_value(virtual_nodes, Info),
             lists:foreach(
               fun(VirtualNode) ->
                       HashedKey = hash(Node, VirtualNode),
                       ets:delete(virtual_node_list, HashedKey)
               end,
-              lists:seq(1, NumberOfVirtualNodes)
+              lists:seq(1, VirtualNodeNum)
              );
         [] -> ok
     end,
@@ -178,7 +176,7 @@ update_nodes(NodesToAdd, NodesToRemove, State) ->
     Reply =
         case {NodesToAdd, NodesToRemove -- [LocalNode]} of
             {[], []} ->
-                {replaced_buckets, []};
+                {ok, []};
             _ ->
                 ?info({update, NodesToAdd, NodesToRemove}),
                 add_nodes(NodesToAdd),
@@ -187,31 +185,31 @@ update_nodes(NodesToAdd, NodesToRemove, State) ->
         end,
     {reply, Reply, State}.
 
-do_find_bucket(Bucket, NumberOfBuckets) when is_integer(Bucket) ->
-    Bucket rem NumberOfBuckets;
-do_find_bucket(Key, NumberOfBuckets) ->
-    hash(Key) div bucket_range(NumberOfBuckets).
+do_find_bucket(Bucket, BucketNum) when is_integer(Bucket) ->
+    Bucket rem BucketNum;
+do_find_bucket(Key, BucketNum) ->
+    hash(Key) div bucket_range(BucketNum).
 
 find_bucket(KeyOrBucket, State) ->
-    NumberOfBuckets = kai_config:get(number_of_buckets),
-    {reply, {bucket, do_find_bucket(KeyOrBucket, NumberOfBuckets)}, State}.
-
-find_replica(KeyOrBucket, State) ->
-    LocalNode = kai_config:get(node),
-    {reply, {nodes, Nodes}, State2} = find_nodes(KeyOrBucket, State),
-    Replica = lists_index(LocalNode, Nodes),
-    {reply, {replica, Replica}, State2}.
+    BucketNum = kai_config:get(buckets),
+    {reply, {ok, do_find_bucket(KeyOrBucket, BucketNum)}, State}.
 
 find_nodes(KeyOrBucket, State) ->
-    NumberOfBuckets = kai_config:get(number_of_buckets),
-    Bucket = do_find_bucket(KeyOrBucket, NumberOfBuckets),
+    BucketNum = kai_config:get(buckets),
+    Bucket = do_find_bucket(KeyOrBucket, BucketNum),
     [{Bucket, Nodes}|_] = ets:lookup(buckets, Bucket),
-    {reply, {nodes, Nodes}, State}.
+    {reply, {ok, Nodes}, State}.
+
+replica_index(KeyOrBucket, State) ->
+    LocalNode = kai_config:get(node),
+    {reply, {ok, Nodes}, State2} = find_nodes(KeyOrBucket, State),
+    ReplicaIndex = lists_index(LocalNode, Nodes),
+    {reply, {ok, ReplicaIndex}, State2}.
 
 choose_node_randomly(State) ->
     {{N1,N2,N3,N4}, Port} = kai_config:get(node),
     Head = {'$1', '_'},
-    Cond = [{'=/=', '$1', {{{{N1,N2,N3,N4}}, Port}}}], % double tuple paranthesis
+    Cond = [{'=/=', '$1', {{{{N1,N2,N3,N4}}, Port}}}], %% double tuple paranthesis
     Body = ['$1'],
     Nodes = ets:select(node_list, [{Head, Cond, Body}]),
     Len = length(Nodes),
@@ -230,8 +228,8 @@ inversed_buckets(Node, Bucket, Buckets) ->
     end.
 
 inversed_buckets(Node) ->
-    NumberOfBuckets = kai_config:get(number_of_buckets),
-    inversed_buckets(Node, NumberOfBuckets-1, []).
+    BucketNum = kai_config:get(buckets),
+    inversed_buckets(Node, BucketNum-1, []).
 
 choose_bucket_randomly(State) ->
     LocalNode = kai_config:get(node),
@@ -239,7 +237,7 @@ choose_bucket_randomly(State) ->
     Len = length(Buckets),
     case Len of
         0 -> {reply, undefined, State};
-        _ -> {reply, {bucket, lists:nth(random:uniform(Len), Buckets)}, State}
+        _ -> {reply, {ok, lists:nth(random:uniform(Len), Buckets)}, State}
     end.
 
 do_node_info(Node, State) ->
@@ -247,7 +245,7 @@ do_node_info(Node, State) ->
     Cond = [],
     Body = ['$2'],
     [Info] = ets:select(node_list, [{Head, Cond, Body}]),
-    {reply, {node_info, Node, Info}, State}.
+    {reply, {ok, Node, Info}, State}.
 
 do_node_info(State) ->
     LocalNode = kai_config:get(node),
@@ -256,15 +254,15 @@ do_node_info(State) ->
 node_list(State) ->
     NodeList = ets:tab2list(node_list),
     NodeList2 = lists:map(fun({Node, _Info}) -> Node end, NodeList),
-    {reply, {node_list, NodeList2}, State}.
+    {reply, {ok, NodeList2}, State}.
 
 virtual_node_list(State) ->
     VirtualNodeList = ets:tab2list(virtual_node_list),
-    {reply, {virtual_node_list, VirtualNodeList}, State}.
+    {reply, {ok, VirtualNodeList}, State}.
 
 bucket_list(State) ->
     Buckets = ets:tab2list(buckets),
-    {reply, {bucket_list, lists:sort(Buckets)}, State}.
+    {reply, {ok, lists:sort(Buckets)}, State}.
 
 buckets(State) ->
     LocalNode = kai_config:get(node),
@@ -274,7 +272,7 @@ buckets(State) ->
           ets:tab2list(buckets)
          ),
     Buckets2 = [element(1, B) || B <- Buckets],
-    {reply, {buckets, lists:sort(Buckets2)}, State}.
+    {reply, {ok, lists:sort(Buckets2)}, State}.
 
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State};
@@ -282,10 +280,10 @@ handle_call({update_nodes, NodesToAdd, NodesToRemove}, _From, State) ->
     update_nodes(NodesToAdd, NodesToRemove, State);
 handle_call({find_bucket, KeyOrBucket}, _From, State) ->
     find_bucket(KeyOrBucket, State);
-handle_call({find_replica, KeyOrBucket}, _From, State) ->
-    find_replica(KeyOrBucket, State);
 handle_call({find_nodes, KeyOrBucket}, _From, State) ->
     find_nodes(KeyOrBucket, State);
+handle_call({replica_index, KeyOrBucket}, _From, State) ->
+    replica_index(KeyOrBucket, State);
 handle_call(choose_node_randomly, _From, State) ->
     choose_node_randomly(State);
 handle_call(choose_bucket_randomly, _From, State) ->
@@ -315,8 +313,8 @@ update_nodes(NodesToAdd, NodesToRemove) ->
     gen_server:call(?SERVER, {update_nodes, NodesToAdd, NodesToRemove}).
 find_bucket(KeyOrBucket) ->
     gen_server:call(?SERVER, {find_bucket, KeyOrBucket}).
-find_replica(KeyOrBucket) ->
-    gen_server:call(?SERVER, {find_replica, KeyOrBucket}).
+replica_index(KeyOrBucket) ->
+    gen_server:call(?SERVER, {replica_index, KeyOrBucket}).
 find_nodes(KeyOrBucket) ->
     gen_server:call(?SERVER, {find_nodes, KeyOrBucket}).
 choose_node_randomly() ->
