@@ -48,6 +48,8 @@ init(Conf, Args) ->
     kai_config:start_link(Args),
     Conf.
 
+end_per_testcase(quorum_error, _Conf) ->
+    ok;
 end_per_testcase(_TestCase, _Conf) ->
     kai_config:stop().
 

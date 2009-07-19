@@ -77,7 +77,7 @@ crud(Key, {N,_R,_W} = Quorum, Nodes) ->
       value = <<"value">>
      },
     ok = rpc:call(Node, kai_coordinator, route, [?NODE1, {put, Data, Quorum}]),
-    [_] = rpc:call(Node, kai_coordinator, route, [?NODE1, {get, #data{key=Key}, Quorum}]),
+    [_Data] = rpc:call(Node, kai_coordinator, route, [?NODE1, {get, #data{key=Key}, Quorum}]),
     N = replica_counts(Key, Nodes),
 
     ok = rpc:call(Node, kai_coordinator, route, [?NODE1, {delete, #data{key=Key}, Quorum}]),
@@ -95,10 +95,10 @@ replica_counts(_Key, [], Acc) ->
 replica_counts(Key, [Node|Rest], Acc) ->
     {ok, Bucket} = rpc:call(Node, kai_hash, find_bucket, [Key]),
     case rpc:call(Node, kai_store, get, [#data{key=Key, bucket=Bucket}]) of
-        Data when is_record(Data, data) ->
-            replica_counts(Key, Rest, Acc + 1);
         undefined ->
-            replica_counts(Key, Rest, Acc)
+            replica_counts(Key, Rest, Acc);
+        ListOfData when is_list(ListOfData) ->
+            replica_counts(Key, Rest, Acc + length(ListOfData))
     end.
 
 get_concurrent_data(Conf) ->
@@ -125,7 +125,13 @@ put_concurrent_data(Conf) ->
       flags = "0",
       value = <<"value">>
      },
-    {error, ebusy} = rpc:call(Node1, kai_coordinator, route, [?NODE1, {put, Data, {2,2,2}}]).
+    ok = rpc:call(Node1, kai_coordinator, route, [?NODE1, {put, Data, {2,2,2}}]),
+
+    %% Node1 has one version, Node2 has two version,
+    %% one from prep_concurrent_data, another from kai_coordinator:put
+    [_,_] = rpc:call(Node1, kai_coordinator, route, [?NODE1, {get, #data{key=Key}, {2,2,2}}]),
+    ?assertEqual(3, replica_counts(Key, [Node1, Node2])),
+    ok.
 
 prep_concurrent_data(Key, Nodes) when is_list(Key) ->
     Data = #data{
@@ -175,8 +181,14 @@ overwrite_by_stale(Conf) ->
 
     set_clock_ahead(Key, Node1),
 
-    %% FIXME: This operation must be succeeded
-    {error, ebusy} = rpc:call(Node2, kai_coordinator, route, [?NODE2, {put, Data, {2,2,2}}]).
+    ok = rpc:call(Node2, kai_coordinator, route, [?NODE2, {put, Data, {2,2,2}}]),
+
+    %% Node2 has one version, Node1 has two version,
+    %% one from prep_concurrent_data, another from kai_coordinator:put
+    [_,_] = rpc:call(Node1, kai_coordinator, route, [?NODE1, {get, #data{key=Key}, {2,2,2}}]),
+    ?assertEqual(3, replica_counts(Key, [Node1, Node2])),
+
+    ok.
 
 set_clock_ahead(Key, Node) ->
     SrcNode = rpc:call(Node, kai_config, get, [node]),

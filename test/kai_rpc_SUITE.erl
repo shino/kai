@@ -75,7 +75,7 @@ crud(Conf) ->
      },
     ok = rpc:call(Node1, kai_rpc, put, [?NODE2, ?NODE1, Data]),
 
-    Data = rpc:call(Node1, kai_rpc, get, [?NODE2, ?NODE1, #data{key="key1", bucket=3}]),
+    [Data] = rpc:call(Node1, kai_rpc, get, [?NODE2, ?NODE1, #data{key="key1", bucket=3}]),
 
     {ok, [Key]} = rpc:call(Node1, kai_rpc, list, [?NODE2, ?NODE1, 3]),
     "key1" = Key#data.key,

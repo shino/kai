@@ -58,12 +58,14 @@ retrieve_data(_Node, [], _State) ->
     ok;
 retrieve_data(Node, [Metadata|Rest], State) ->
     case kai_store:get(Metadata) of
-        Data when is_record(Data, data) ->
+        DataList when is_list(DataList) ->
             retrieve_data(Node, Rest, State);
         undefined ->
             case kai_rpc:get(Node, State#state.node, Metadata) of
-                Data when is_record(Data, data) ->
-                    kai_store:put(Data),
+                RemoteDataList when is_list(RemoteDataList) ->
+                    lists:map(fun(RemoteData) ->
+                                      kai_store:put(RemoteData) end,
+                              RemoteDataList),
                     retrieve_data(Node, Rest, State);
                 undefined ->
                     retrieve_data(Node, Rest, State);

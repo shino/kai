@@ -33,7 +33,7 @@ init(_Args) ->
           fun(I) ->
                   Name = list_to_atom(atom_to_list(?MODULE) ++ "_" ++ integer_to_list(I)),
                   File = Dir ++ "/" ++ integer_to_list(I),
-                  case dets:open_file(Name, [{type, set}, {keypos, 2}, {file, File}]) of
+                  case dets:open_file(Name, [{type, bag}, {keypos, 2}, {file, File}]) of
                       {ok, Table} -> {I, Table};
                       {error, Reason} -> ?info(Reason),
                                          exit(Reason)
@@ -79,35 +79,38 @@ do_list(Bucket, State) ->
 do_get(#data{key=Key, bucket=Bucket} = _Data, State) ->
     Table = bucket_to_table(Bucket, State),
     case dets:lookup(Table, Key) of
-        [Data] -> {reply, Data, State};
-        _      -> {reply, undefined, State}
+        []      -> {reply, undefined, State};
+        StoredDataList -> {reply, StoredDataList, State}
     end.
 
 do_put(Data, State) when is_record(Data, data) ->
     Table = bucket_to_table(Data#data.bucket, State),
-    case dets:lookup(Table, Data#data.key) of
-        [StoredData] ->
-            case vclock:descends(Data#data.vector_clocks, StoredData#data.vector_clocks) of
-                true -> insert_and_reply(Data, Table, State);
-                _ -> {reply, {error, "stale or concurrent state found in kai_store"}, State}
-            end;
-        _ -> insert_and_reply(Data, Table, State)
-    end.
-
-insert_and_reply(Data, Table, State) ->
-    dets:insert(Table, Data),
-    dets:sync(Table),
+    insert_and_remove(Table, Data, dets:lookup(Table, Data#data.key)),
     {reply, ok, State}.
+
+insert_and_remove(Table, Data, StoredDataList) ->
+    dets:insert(Table, Data),
+    remove_descend_data(Table, Data#data.vector_clocks, StoredDataList),
+    dets:sync(Table).
+
+remove_descend_data(_Table, _Vc, []) ->
+    ok;
+remove_descend_data(Table, Vc, [StoredData|Rest]) ->
+    case vclock:descends(Vc, StoredData#data.vector_clocks) of
+        true -> dets:delete_object(Table, StoredData);
+        _ -> nop
+    end,
+    remove_descend_data(Table, Vc, Rest).
 
 do_delete(#data{key=Key, bucket=Bucket} = _Data, State) ->
     Table = bucket_to_table(Bucket, State),
     case dets:lookup(Table, Key) of
-        [_Data2] ->
+        [] ->
+            {reply, undefined, State};
+        _StoredDataList ->
             dets:delete(Table, Key),
             dets:sync(Table),
-            {reply, ok, State};
-        _ ->
-            {reply, undefined, State}
+            {reply, ok, State}
     end.
 
 info(Name, State) ->

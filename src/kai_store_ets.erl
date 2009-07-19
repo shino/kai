@@ -25,7 +25,7 @@ start_link(Server) ->
     gen_server:start_link({local, Server}, ?MODULE, [], _Opts = []).
 
 init(_Args) ->
-    ets:new(?MODULE, [set, private, named_table, {keypos, 2}]),
+    ets:new(?MODULE, [bag, private, named_table, {keypos, 2}]),
     {ok, []}.
 
 terminate(_Reason, _State) ->
@@ -37,7 +37,7 @@ do_list(Bucket, State) ->
         key           = '$1',
         bucket        = Bucket,
         last_modified = '$2',
-        vector_clocks = '$3', 
+        vector_clocks = '$3',
         checksum      = '$4',
         flags         = '_',
         value         = '_'
@@ -55,32 +55,36 @@ do_list(Bucket, State) ->
 
 do_get(#data{key=Key} = _Data, State) ->
     case ets:lookup(?MODULE, Key) of
-        [Data] -> {reply, Data, State};
-        _      -> {reply, undefined, State}
+        []      -> {reply, undefined, State};
+        StoredDataList    -> {reply, StoredDataList, State}
     end.
 
 do_put(Data, State) when is_record(Data, data) ->
-    case ets:lookup(?MODULE, Data#data.key) of
-        [StoredData] ->
-            case vclock:descends(Data#data.vector_clocks, StoredData#data.vector_clocks) of
-                true -> insert_and_reply(Data, State);
-                _ -> {reply, {error, "stale or concurrent state found in kai_store"}, State}
-            end;
-        _ -> insert_and_reply(Data, State)
-    end.
-
-insert_and_reply(Data, State) ->
-    ets:insert(?MODULE, Data),
+    insert_and_remove(Data, ets:lookup(?MODULE, Data#data.key)),
     {reply, ok, State}.
+
+insert_and_remove(Data, StoredDataList) ->
+    ets:insert(?MODULE, Data),
+    remove_descend_data(Data#data.vector_clocks, StoredDataList).
+
+remove_descend_data(_Vc, []) ->
+    ok;
+remove_descend_data(Vc, [StoredData|Rest]) ->
+    case vclock:descends(Vc, StoredData#data.vector_clocks) of
+        true -> ets:delete_object(?MODULE, StoredData);
+        _ -> nop
+    end,
+    remove_descend_data(Vc, Rest).
 
 do_delete(#data{key=Key} = _Data, State) ->
     case ets:lookup(?MODULE, Key) of
-        [_Data2] ->
+        [] ->
+            {reply, undefined, State};
+        _StoredDataList ->
             ets:delete(?MODULE, Key),
-            {reply, ok, State};
-        _ ->
-            {reply, undefined, State}
+            {reply, ok, State}
     end.
+
 
 info(Name, State) ->
     Value =

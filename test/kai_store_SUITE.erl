@@ -31,22 +31,22 @@
                     {dets_tables, 2}]).
 
 sequences() ->
-    [{ ets, [ ets_crud,  ets_conflict,  ets_info,  ets_perf]},
-     {dets, [dets_crud, dets_conflict, dets_info, dets_perf]}].
+    [{ ets, [ ets_crud,  ets_all_delete, ets_conflict,  ets_info,  ets_perf]},
+     {dets, [dets_crud, dets_all_delete,dets_conflict, dets_info, dets_perf]}].
 
 all() -> [{sequence, ets}, {sequence, dets}].
 
 init_per_testcase(TestCase, Conf) ->
     case atom_to_list(TestCase) of
-        ["dets"|_] -> init(Conf, ?DETS_ARGS);
-        _          -> init(Conf, ?ETS_ARGS)
+        "dets" ++ _ -> init(Conf, ?DETS_ARGS);
+        _           -> init(Conf, ?ETS_ARGS)
     end.
 
 init(Conf, Args) ->
     kai_config:start_link(Args),
     kai_store:start_link(),
     Conf.
-   
+
 end_per_testcase(_TestCase, _Conf) ->
     kai_store:stop(),
     kai_config:stop(),
@@ -67,7 +67,7 @@ crud() ->
      },
     ok = kai_store:put(Data),
 
-    Data = kai_store:get(#data{key="key1", bucket=3}),
+    [Data] = kai_store:get(#data{key="key1", bucket=3}),
     undefined = kai_store:get(#data{key="key2", bucket=1}),
 
     {ok, [Key]} = kai_store:list(3),
@@ -84,7 +84,7 @@ crud() ->
      },
 
     ok = kai_store:put(Data2),
-    Data2 = kai_store:get(#data{key="key1", bucket=3}),
+    [Data2] = kai_store:get(#data{key="key1", bucket=3}),
 
     ok = kai_store:delete(#data{key="key1", bucket=3}),
 
@@ -95,6 +95,35 @@ ets_conflict(_Conf) -> conflict().
 dets_conflict(_Conf) -> conflict().
 
 conflict() ->
+    InitialVc = vclock:increment(node1, vclock:fresh()),
+    Data = #data{
+      key           = "key1",
+      bucket        = 3,
+      last_modified = now(),
+      checksum      = erlang:md5(<<"value1">>),
+      flags         = "0",
+      vector_clocks = InitialVc,
+      value         = <<"value1">>
+     },
+    ok = kai_store:put(Data),
+
+    ConflictingVc = vclock:increment(node2, vclock:fresh()),
+    ok = kai_store:put(Data#data{ vector_clocks = ConflictingVc }),
+    ?assertEqual(2, length(kai_store:get(Data))),
+
+    AscendingVc = vclock:increment(node2, ConflictingVc),
+    ok = kai_store:put(Data#data{ vector_clocks = AscendingVc }),
+    ?assertEqual(2, length(kai_store:get(Data))),
+
+    MergedVc = vclock:merge([InitialVc, AscendingVc]),
+    ok = kai_store:put(Data#data{ vector_clocks = MergedVc }),
+    ?assertEqual(1, length(kai_store:get(Data))),
+    ok.
+
+ets_all_delete(_Conf) -> all_delete().
+dets_all_delete(_Conf) -> all_delete().
+
+all_delete() ->
     Data = #data{
       key           = "key1",
       bucket        = 3,
@@ -106,11 +135,13 @@ conflict() ->
      },
     ok = kai_store:put(Data),
 
-    {error, _Reason} =
-        kai_store:put(Data#data{
-                        %% Conflicting VectorClocks
-                        vector_clocks = vclock:increment(node2, vclock:fresh())
-                       }).
+    ok = kai_store:put(
+           Data#data{vector_clocks = vclock:increment(node2, vclock:fresh())}),
+    ?assertEqual(2, length(kai_store:get(Data))),
+
+    ok = kai_store:delete(Data),
+    undefined = kai_store:get(Data),
+    ok.
 
 ets_info(_Conf) -> info().
 dets_info(_Conf) -> info().

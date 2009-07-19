@@ -20,7 +20,7 @@
 sequences() ->
     [{seq, [add_directly, add_indirectly,
             remove_directly, remove_indirectly,
-            update_by_timeout, sync_and_delete, sync_and_collect]}].
+            update_by_timeout, sync_and_move_out, sync_and_collect]}].
 
 all() -> [{sequence, seq}].
 
@@ -164,7 +164,7 @@ update_by_timeout(Conf) ->
     ?assertEqual(3, length(NodeList2)),
     ?assert(lists:member(?NODE3, NodeList2)).
 
-sync_and_delete(Conf) ->
+sync_and_move_out(Conf) ->
     Node1 = ?config(node1, Conf),
 
     %% 16 data are put at Node1
@@ -199,18 +199,17 @@ sync_and_collect(Conf) ->
     rpc:call(Node1, kai_membership, check_node, [?NODE3]),
     rpc:call(Node3, kai_membership, check_node, [?NODE1]),
 
-    %% Some data are moved to Node3
+    %% Some data are moved to Node3.
     wait(),
 
-    %% Node3 is down
+    %% Node3 is down, and Node 1 checks that.
     ok = slave:stop(Node3),
-
     rpc:call(Node1, kai_membership, check_node, [?NODE3]),
 
     wait(),
 
     %% All data must come back to Node1, since Node3 was down
-    DataNum = count(Node1, 4, 0).
+    ?assertEqual(DataNum, count(Node1, 4, 0)).
 
 prep(_Node, 0) ->
     ok;
@@ -223,7 +222,7 @@ prep(Node, I) ->
       last_modified = now(),
       checksum      = erlang:md5(<<"value">>),
       flags         = "0",
-      vector_clocks = vclock:fresh(),
+      vector_clocks = vclock:increment(Node, vclock:fresh()),
       value         = <<"value">>
      }]),
     prep(Node, I-1).
@@ -232,6 +231,7 @@ count(_Node, 0, DataNum) ->
     DataNum;
 count(Node, Bucket, DataNum) ->
     {ok, KeyList} = rpc:call(Node, kai_store, list, [Bucket-1]),
+    ct:log("~p 's Bucket #~p:  ~p", [Node, Bucket-1, KeyList]),
     count(Node, Bucket-1, DataNum + length(KeyList)).
 
 %% TODO: Check whether data is synchronized

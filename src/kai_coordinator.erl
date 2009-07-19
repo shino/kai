@@ -102,13 +102,13 @@ map_in_get(DstNode, SrcNode, Data, Ref, Pid) ->
     end.
 
 gather_in_get(_Ref, _N, 0, Results) ->
-    Results;
+    lists:flatten(Results);
 gather_in_get(_Ref, 0, _R, _Results) ->
     {error, enodata};
 gather_in_get(Ref, N, R, Results) ->
     receive
-        {Ref, Data} when is_record(Data, data) ->
-            gather_in_get(Ref, N-1, R-1, [Data|Results]);
+        {Ref, ListOfData} when is_list(ListOfData) ->
+            gather_in_get(Ref, N-1, R-1, [ListOfData|Results]);
         {Ref, undefined} ->
             gather_in_get(Ref, N-1, R-1, Results);
         {Ref, _Other} ->
@@ -125,14 +125,18 @@ coordinate_put(SrcNode, Data, {N,_R,W}) ->
     {ok, Bucket} = kai_hash:find_bucket(Key),
     {ok, DstNodes} = kai_hash:find_nodes(Bucket),
     Ref = make_ref(),
-    Data1 =
+    VcList =
         case kai_store:get(Data#data{bucket=Bucket}) of
-            PreviousData when is_record(PreviousData, data) ->
-                PreviousData;
+            PreviousDataList when is_list(PreviousDataList) ->
+                lists:map(
+                  fun(PreviousData) ->
+                          PreviousData#data.vector_clocks end,
+                  PreviousDataList);
             undefined ->
-                #data{key=Key, vector_clocks=vclock:fresh()}
+                [vclock:fresh()]
         end,
-    {ok, Data2} = kai_version:update(Data1),
+    {ok, Data2} = kai_version:update(
+                    Data#data{vector_clocks = vclock:merge(VcList)}),
     Data3 = Data2#data{
         bucket   = Bucket,
         checksum = erlang:md5(Value),
