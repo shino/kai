@@ -57,7 +57,7 @@ init_node(Conf, I, Options) ->
     {ok, Node} =
         slave:start(Host,
                     Name,
-                    " -pa ../ebin ../../ebin ../../../ebin ebin"),
+                    " -pa ../../ebin"),
     ok = rpc:call(Node, application, load, [kai]),
     lists:foreach(fun({Par, Val}) ->
                           rpc:call(Node, application, set_env, [kai, Par, Val])
