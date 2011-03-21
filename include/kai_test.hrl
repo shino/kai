@@ -52,11 +52,12 @@
 init_node(Conf, I) ->
     init_node(Conf, I, []).
 init_node(Conf, I, Options) ->
-    net_kernel:start([?MODULE, shortnames]),
+    Name = list_to_atom("kai" ++ integer_to_list(I)),
+    [_, Host] = string:tokens(atom_to_list(node()), "@"),
     {ok, Node} =
-        slave:start(net_adm:localhost(), 
-                    list_to_atom("kai" ++ integer_to_list(I)),
-                    "-pa ../../../ebin"),
+        slave:start(Host,
+                    Name,
+                    " -pa ../ebin ../../ebin ../../../ebin ebin"),
     ok = rpc:call(Node, application, load, [kai]),
     lists:foreach(fun({Par, Val}) ->
                           rpc:call(Node, application, set_env, [kai, Par, Val])
@@ -66,6 +67,7 @@ init_node(Conf, I, Options) ->
                         {buckets, 4},
                         {virtual_nodes, 2}|Options]),
     ok = rpc:call(Node, application, start, [kai]),
+    ct:log("init_node node almost last", [Node]),
     [{list_to_atom("node" ++ integer_to_list(I)), Node}|Conf].
 
 end_node(Conf, I) ->
