@@ -67,7 +67,6 @@ init_node(Conf, I, Options) ->
                         {buckets, 4},
                         {virtual_nodes, 2}|Options]),
     ok = rpc:call(Node, application, start, [kai]),
-    ct:log("init_node node almost last", [Node]),
     [{list_to_atom("node" ++ integer_to_list(I)), Node}|Conf].
 
 end_node(Conf, I) ->
